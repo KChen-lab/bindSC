@@ -1,5 +1,5 @@
 
-<image src="./doc/images/logo.png" width="400">
+<image src="./doc/images/logo.png" width="400"> [click me!!!](https://www.youtube.com/watch?v=azmXMYc4NCs&feature=youtu.be)
   
 **bindSC** (**B**i-order  **IN**tegration of multi-omics **D**ata from **S**ingle **C**ell sequencing technologies) is an R package for single cell multi-omic integration analysis, developed and maintained by [Ken chen's lab](https://sites.google.com/view/kchenlab/Home) in MDACC. `bindSC` is developed to address the challenge of single-cell multi-omic data integration that consists of unpaired cells measured with unmatched features across modalities. Previous methods such as [Seurat](https://satijalab.org/seurat/), [Liger](https://github.com/MacoskoLab/liger), [Harmony](https://github.com/immunogenomics/harmony) did not work on this case unless match feature empricallcy. For example, integration of scRNA-seq and scATAC-seq data requires to calculate the gene/promoter activity by counting peaks in gene body, which always loses information. This strategy also did not work on integrating scRNA-seq and cytof data becasue gene pression and protein abundance level is not always correlated due to sparsity of scRNA-seq data or post translational modification. 
 
