@@ -12,7 +12,7 @@ Once multiple datasets are integrated, `bindSC` provides functionality for furth
 * Jointly defining cell types from multi-omic datasets
 * Identifying comprehensive molecular multi-view of biological processes in cell type level.
 
-Improvements and new features will be added on a regular basis, please contact jinzhuangdou198706@gmail.com with any question.
+Improvements and new features will be added on a regular basis, please contact jinzhuangdou198706@gmail.com or kchen3@mdanderson.org with any question.
 
 ## Version History 
 
@@ -73,6 +73,6 @@ For usage examples and guided walkthroughs, check the `vignettes` directory of t
 This project is covered under the **GNU General Public License 3.0**.
 
 ## Citation
-MS is in preparation.
+Preprint: [Unbiased integration of single cell multi-omics data](https://www.biorxiv.org/content/10.1101/2020.12.11.422014v1)
   
 
