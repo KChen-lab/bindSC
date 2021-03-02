@@ -1,0 +1,41 @@
+Package: bindSC
+Title: Bi-order INtegration of Data from Single Cell multi-omics technologies  \
+Version: 1.0.0
+Authors@R: 
+    person(given = "Jinzhuang", family = "Dou",role = c( "cre"),
+    email = "jinzhuangdou198706@gmail.com",
+    comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: Bi-order INtegration of Data from Single Cell multi-omics technologies
+URL: 
+BugReports: 
+License: GPL-3 | file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends:
+	R (>= 3.6)
+Imports:
+	umap (>= 0.2.4.0),
+	irlba (>= 2.3.3),
+	progress (>= 1.2.2),
+	Matrix,
+	rdist (>= 0.0.4),
+	ggplot2 (>= 3.2.1),
+    Seurat,
+    dplyr,
+    ComplexHeatmap,
+    reshape2,
+    ggrepel,
+    DescTools,
+    FNN,
+    cluster,
+    corrplot,
+    e1071,
+    ggpubr
+Collate:
+    'generics.R'
+    'BiCCA.R'
+RoxygenNote: 7.1.1
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

@@ -1,0 +1,8 @@
+* using log directory ‘/home/jdou1/project/integraModel/dev_5/src/bindSC/data.Rcheck’
+* using R version 3.6.1 (2019-07-05)
+* using platform: x86_64-conda_cos6-linux-gnu (64-bit)
+* using session charset: UTF-8
+* checking for file ‘data/DESCRIPTION’ ... ERROR
+File DESCRIPTION does not exist
+* DONE
+Status: 1 ERROR

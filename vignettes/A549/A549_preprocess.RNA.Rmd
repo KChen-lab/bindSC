@@ -1,0 +1,66 @@
+---
+title: "A549_preprocess"
+author: "douj"
+date: "October 24, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(stringr)
+library(Matrix)
+library(data.table)
+library(Seurat)
+library(ggpubr)
+library(gridExtra)
+source("./monocle_subfunc.r")
+```
+
+```{r}
+load("../../inst/A549/180116_combined.RData")
+ls()
+```
+# Construct RNA-seq matrix (take 5~10 mins)  
+
+```{r}
+
+ID <- df_gene_RNA
+ID$gene_short_name <- make.names(ID$gene_short_name, unique=TRUE)
+rna = construct_cds_RNA(gene_count_RNA, df_cell_RNA, ID)
+rna = rna[, rna$cell_name=="A549"]
+
+pData(rna)$Total_mRNAs <- Matrix::colSums(exprs(rna))
+rna <- rna[, pData(rna)$Total_mRNAs<9100 &  pData(rna)$Total_mRNAs>500 &pData(rna)$source=="Human"]
+rna = estimateSizeFactors(rna)
+rna = estimateDispersions(rna)
+rna = detectGenes(rna, 0.2)
+residualModelFormulaStr = "~  num_genes_expressed + Total_mRNAs"
+FM <- normalize_expr_data(rna, "log", 1)
+xm <- Matrix::rowMeans(FM)
+xsd <- sqrt(Matrix::rowMeans((FM - xm)^2))
+FM <- FM[xsd > 0.1 & xm>0.1,  ]
+X.model_mat <- sparse.model.matrix(as.formula(residualModelFormulaStr), 
+          data = pData(rna), drop.unused.levels = TRUE)
+fit <- limma::lmFit(FM, X.model_mat)
+beta <- fit$coefficients[, -1, drop = FALSE]
+beta[is.na(beta)] <- 0
+FM <- as.matrix(FM) - beta %*% t(X.model_mat[, -1])
+FM <- as.matrix(Matrix::t(scale(Matrix::t(FM))))
+FM <- FM[!is.na(row.names(FM)), ]
+FM <- FM[apply(FM, 1, function(x) all(is.finite(x))), ]
+FM <-FM-min(FM)
+A549_rna <- CreateSeuratObject(counts = FM, project = "A549", min.cells = 0, min.features = 0)
+A549_rna  <- AddMetaData(A549_rna, metadata = pData(rna))
+A549_rna <- ScaleData(A549_rna)
+A549_rna <- RunPCA(A549_rna, features = rownames(A549_rna))
+A549_rna  <- RunUMAP(A549_rna , dims = 1:10)
+
+X<-as.matrix(A549_rna[["RNA"]][])
+X<- X-rowMeans(X)
+
+A549 <- c()
+A549$X <- X
+A549$RNA_meta <- cbind(A549_rna@meta.data, A549_rna@reductions$umap@cell.embeddings[,c(1,2)])
+saveRDS(A549, file="A549_rna.rds")
+```

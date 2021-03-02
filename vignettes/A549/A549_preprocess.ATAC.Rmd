@@ -1,0 +1,102 @@
+---
+title: "A549_preprocess"
+author: "douj"
+date: "October 24, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(stringr)
+library(Matrix)
+library(data.table)
+library(Seurat)
+library(ggpubr)
+library(gridExtra)
+source("./monocle_subfunc.r")
+```
+
+```{r}
+load("../../inst/A549/180116_combined.RData")
+ls()
+```
+
+# Construct ATAC-seq matrix (It will take 5~10 mins) 
+
+```{r}
+
+df_cell_ATAC_human = df_cell_ATAC %>% filter(source == "Human")
+df_cell_ATAC_human <- df_cell_ATAC[df_cell_ATAC$source=="Human", ]
+
+peak_count_ATAC_human = peak_count_ATAC[, df_cell_ATAC$source == "Human"]
+df_peak_ATAC_human = df_peak_ATAC[df_peak_ATAC$chr %in% c(as.character(seq(1, 30)), "X", "Y"), ]
+peak_count_ATAC_human = peak_count_ATAC_human[df_peak_ATAC$chr %in% c(as.character(seq(1, 30)), "X", "Y"),]
+peak_count_ATAC_human[peak_count_ATAC_human > 0] = 1
+
+# filter out the low accessible cells
+tmp_acc_count = Matrix::colSums(peak_count_ATAC_human)
+peak_count_ATAC_human = peak_count_ATAC_human[, tmp_acc_count >= 300]
+df_cell_ATAC_human = df_cell_ATAC_human[tmp_acc_count >= 300, ]
+dim(peak_count_ATAC_human)
+# filter out the low accessible sites
+tmp_acc_count = Matrix::rowSums(peak_count_ATAC_human)
+peak_count_ATAC_human = peak_count_ATAC_human[tmp_acc_count > 0.01 * nrow(df_cell_ATAC_human), ]
+df_peak_ATAC_human = df_peak_ATAC_human[tmp_acc_count > 0.01 * nrow(df_cell_ATAC_human), ]
+
+atac = construct_cds_ATAC(peak_count_ATAC_human, df_cell_ATAC_human, df_peak_ATAC_human)
+atac <- aggregate_nearby_peaks(atac, 10)
+atac$cell_type = with(pData(atac), ifelse(group == "293T_3T3", "293T", "A549"))
+atac = atac[, atac$cell_type == "A549"]
+
+atac = estimateSizeFactors(atac)
+atac = estimateDispersions(atac)
+atac = detectGenes(atac, 0.1)
+
+pData(atac)$peak_ratio = ((pData(atac))$peak_reads) / ((pData(atac))$total_reads)
+residualModelFormulaStr = "~ experiment + num_genes_expressed"
+
+cds<-atac
+FM <- normalize_expr_data(cds, "log", 1)
+xm <- Matrix::rowMeans(FM)
+xsd <- sqrt(Matrix::rowMeans((FM - xm)^2))
+FM <- FM[xsd > 0.01 & xm>0.01 & fData(atac)$num_cells_expressed>10, ]
+X.model_mat <- sparse.model.matrix(as.formula(residualModelFormulaStr), 
+          data = pData(cds), drop.unused.levels = TRUE)
+fit <- limma::lmFit(FM, X.model_mat)
+beta <- fit$coefficients[, -1, drop = FALSE]
+beta[is.na(beta)] <- 0
+FM <- as.matrix(FM) - beta %*% t(X.model_mat[, -1])
+FM <- as.matrix(Matrix::t(scale(Matrix::t(FM))))
+FM <- FM[!is.na(row.names(FM)), ]
+FM <- FM[apply(FM, 1, function(x) all(is.finite(x))), ]
+
+# To Seurat object
+
+A549_atac <- CreateSeuratObject(counts = FM, project = "A549", min.features =0, min.cells = 0)
+A549_atac <- AddMetaData(A549_atac, metadata = pData(atac))
+
+#DefaultAssay(A549_atac) <- "ATAC"
+
+A549_atac <- ScaleData(A549_atac)
+A549_atac <- RunPCA(A549_atac, features=rownames(A549_atac))
+A549_atac <- RunUMAP(A549_atac, reduction = "pca", dims = 1:10)
+
+Y <- as.matrix(A549_atac[["RNA"]][])
+
+Y<-Y-rowMeans(Y)
+
+activity.matrix <- CreateGeneActivityMatrix(peak.matrix = Y , 
+  annotation.file = "/home/jdou1/project/integraModel/Homo_sapiens.GRCh37.87.gtf",
+    seq.levels = c(1:22, "X", "Y"), upstream = 2000, verbose = TRUE)
+Z0 <- as.matrix(activity.matrix)
+
+A549 <- c()
+A549$Y <- Y
+A549$Z0 <- Z0
+A549$ATAC_meta <- cbind(A549_atac@meta.data, A549_atac@reductions$umap@cell.embeddings[,c(1,2)])
+
+saveRDS(A549, file="A549_atac.rds")
+
+```
+
