@@ -70,7 +70,8 @@ For usage examples and guided walkthroughs, check the `vignettes` directory of t
 * [Jointly Defining Cell Types from scRNA-seq and scATAC-seq](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/A549/A549.html)
 
 
-* [Integraion of scRNA-seq and cytof](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/main.html)
+* [Integraion of scRNA-seq and cytof](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
+
 
 
 ## Bug report
