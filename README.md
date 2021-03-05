@@ -20,12 +20,12 @@ Improvements and new features will be added on a regular basis, please contact j
 
 * Add the modality specfic weighting factor on the objective fucntion 
 * Add the weighting factor of initilized gene score matrix on the objective function 
-* bindSC is able to take low-dimension representaion (for example  PCs/LSI) from orignal matrix as input for integration
+* bindSC is able to take low-dimension representaions (for example  PCs/LSI) from orignal matrix as input for integration. This will save computational time dramatically for large-scale data. 
+* 
 
 ### v1.0.0 [11/14/2020]
 
-* Add integraion of scRNA-seq and cytof data demo from CITE-seq technology 
-* Add `fast-SVD` module to integrate large scale datasets (cell size > 1M)  
+* Add integraion of scRNA-seq and cytof data demo from CITE-seq technology   
 
 ### v1.0.0 [9/9/2020]
 
