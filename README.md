@@ -71,7 +71,7 @@ For usage examples and guided walkthroughs, check the `vignettes` directory of t
 
 * [Jointly Defining Cell Types from snRNA-seq and snATAC-seq on mouse retina dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/mouse-retina/retina.html)
 
-* [Integrating scRNA-seq and spatial transcriptomics on mouse brain cortex dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/mouse-retina/retina.html)
+* [Integrating scRNA-seq and spatial transcriptomics on mouse brain cortex dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/SC_ST/SC_ST.html)
 
 * [Integraion of scRNA-seq and protein](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
 
