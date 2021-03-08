@@ -77,8 +77,6 @@ For usage examples and guided walkthroughs, check the `vignettes` directory of t
 
 We also provided comparison of bindSC with available tools including Seurat, LIGER, and Harmony on above 4 benchmarking datasets
 
-* [Comparison on simulated dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
-
 * [Comparison on A549 dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
 
 * [Comparison on mouse retina dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
