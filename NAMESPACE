@@ -3,6 +3,7 @@
 export(BiCCA)
 export(dimReduce)
 export(BiCCA_para_opt)
+export(paraSel_plot)
 export(UMAP_plot)
 export(impuZ)
 export(plot_geneScoreChange)
