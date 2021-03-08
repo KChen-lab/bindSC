@@ -67,11 +67,25 @@ For usage examples and guided walkthroughs, check the `vignettes` directory of t
 
 *  [Testing unmatched feature integration using simulated data](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/sim/sim.html)
 
-* [Jointly Defining Cell Types from scRNA-seq and scATAC-seq](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/A549/A549.html)
+* [Jointly Defining Cell Types from scRNA-seq and scATAC-seq on A549 dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/A549/A549.html)
 
+* [Jointly Defining Cell Types from snRNA-seq and snATAC-seq on mouse retina dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/mouse-retina/retina.html)
 
-* [Integraion of scRNA-seq and cytof](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
+* [Integrating scRNA-seq and spatial transcriptomics on mouse brain cortex dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/mouse-retina/retina.html)
 
+* [Integraion of scRNA-seq and protein](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
+
+We also provided comparison of bindSC with available tools including Seurat, LIGER, and Harmony on above 4 benchmarking datasets
+
+* [Comparison on simulated dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
+
+* [Comparison on A549 dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
+
+* [Comparison on mouse retina dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
+
+* [Comparison on mouse brain cortex dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
+
+* [Comparison on CITE-seq dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
 
 
 ## Bug report
