@@ -65,7 +65,7 @@ $ R CMD INSTALL bindSC
 
 For usage examples and guided walkthroughs, check the `vignettes` directory of the repo.
 
-*  [Fast start using simulated data](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/sim/method_eval.html)
+*  [Quick start using simulated data](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/sim/method_eval.html)
 
 * [Jointly Defining Cell Types from scRNA-seq and scATAC-seq on A549 dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/A549/A549.html)
 
