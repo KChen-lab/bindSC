@@ -61,6 +61,11 @@ Users can also install `bindSC` from source code:
 $ git clone https://github.com/KChen-lab/bindSC.git
 $ R CMD INSTALL bindSC
 ```
+
+The following visualization - integration of scRNA and protein data from CITE-seq - is a demo to show how bindSC improve the gene score matrix **Z** during the iteration process. The iteration 0 shows results based on traditional CCA (restricted to 25 homologous protein genes) 
+(https://github.com/KChen-lab/bindSC/blob/master/doc/images/bindSC_benchmarking.gif)
+
+
 ## Usage 
 
 For usage examples and guided walkthroughs, check the `vignettes` directory of the repo.
