@@ -62,8 +62,7 @@ $ git clone https://github.com/KChen-lab/bindSC.git
 $ R CMD INSTALL bindSC
 ```
 
-The following visualization - integration of scRNA and protein data from CITE-seq - is a demo to show how bindSC improve the gene score matrix **Z** during the iteration process. The iteration 0 shows results based on traditional CCA (restricted to 25 homologous protein genes) 
-(https://github.com/KChen-lab/bindSC/blob/master/doc/images/bindSC_benchmarking.gif)
+The following visualization - integration of scRNA and protein data from CITE-seq - is a demo to show how bindSC improve the gene score matrix **Z** during the iteration process. The left panel shows cells from RNA data in co-embeddings. The middel panel shows cells from protein data in co-embeddings. The right panel shows the comparsion of updated gene score matrix with the observed protein abudance level (e.g., the gold standard). The iteration 0 shows results based on traditional CCA (restricted to 25 homologous protein genes) <image src="https://github.com/KChen-lab/bindSC/blob/master/doc/images/bindSC_benchmarking.gif" width="1000"?
 
 
 ## Usage 
