@@ -1,55 +1,34 @@
 ---
-title: "Jointly define cell types from single cell multi-omics datasets"
-author: "Jinzhuang Dou"
-date: "10/14/2020"
+title: "Integration of scRNA & scATAC using bindSC "
+author: "Jinzhuang Dou @ Kenchen's lab (MDACC)"
+date: "February 9, 2021"
 output:
-    html_document: default
-    pdf_document: default
+  html_document: default
+  pdf_document: default
 ---
 
-```{r, include = FALSE}
-knitr::opts_chunk$set(
-  echo = TRUE,
-  collapse = TRUE,  
-  comment = "#>"
-)
+```{r setup, include=FALSE,cache=TRUE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 ```
 
-This guide will demonstrate the usage of bindSC to jointly define cell types by leveraging mulitple single-cell modalities. Here we define cell types that incorporate both gene expression and chromatin accessibility data. 
+This guide will demonstrate the usage of bindSC to jointly define cell types by leveraging mulitple single-cell modalities. Here we define cell types that incorporate both gene expression and chromatin accessibility data. The dataset is generated from the sci-CAR technology (Cao et al., 2018, science).
 
-### Stage 1: Load the scRNA-seq and scATAC-seq data
+#### Stage 1: Load the scRNA-seq and scATAC-seq data
 
 **For convenience, we have prepared the pre-processed data which are ready to use.** 
-User can refer to `A549_preprocess.ATAC.html` and `A549_preprocess.RNA.html` for the details of running the pre-processing workflow (It will take 10 ~ 20 mins). 
+User can refer to `A549_preprocess.ATAC.html` and `A549_preprocess.RNA.html` for the details of running the pre-processing workflow (It will take 10 ~ 20 mins). For RNA data, there are 6,005 cells measured on 4,759 genes (`A549_RNA$X`). For ATAC data, there are 3,628 cells measured on 13,515 genes (gene activity estimated from peak; `A549_ATAC$Z0`) and 24,953 peaks (`A549_ATAC$Y`).  
 
 ```{r, message = FALSE, warning=FALSE, results='hide'}
-source("../../R/BiCCA.R")
-source("../../R/bindSC.R")
-source("../../R/ColorPalettes.R")
-source("../../R/generics.R")
-source("../../R/Heatmap.R")
-source("../../R/preProcessing.R")
+library(bindSC)
 
-
-library(progress)
-library(umap)
-library(irlba)
-library(Seurat)
-library(dplyr)
-library(ComplexHeatmap)
-library(reshape2)
-library(ggplot2)
-library(reshape2)
-library(Matrix)
-library(dplyr)
-
-# Change A549_rna.rds and A549_atac.rds to your own path
-
-A549_RNA <- readRDS("../../../data/A549_rna.rds")
-A549_ATAC <- readRDS("../../../data/A549_atac.rds")
+A549_RNA <- readRDS("../../data/A549_rna.rds")
+A549_ATAC <- readRDS("../../data/A549_atac.rds")
 
 summary(A549_RNA)
 summary(A549_ATAC)
+dim(A549_RNA$X)
+dim(A549_ATAC$Z0)
+dim(A549_ATAC$Y)
 
 ```
 
@@ -72,21 +51,29 @@ p<-ggarrange(p1, p2, nrow = 1, common.legend = TRUE, legend = "right")
 p
 ```
 
-### Stage 2: Preparion of bindSC input
+#### Stage 2: Preparation of bindSC input
 
-We next perform bindSC on A549 data. bindSC requires three matrices as input: 
+We next perform bindSC alignment on A549 data. In generall, bindSC requires three matrices as input: 
 
 - `X` :  gene expression matrix from scRNA-seq data 
 - `Y` :  chromatin accessibility matrix from scATAC-seq data 
-- `Z0` : gene activity matrix from scATAC-seq data 
+- `Z0` : initilized gene activity matrix from scATAC-seq data 
 
-The gene activity matrix `Z0` is estimated by counting the total number of ATAC-seq reads within the gene body/promoter region of each gene in each cell. More details can be seen in `A549_preprocess.ATAC.html`
+The gene activity matrix `Z0` is estimated by counting the total number of ATAC-seq reads within the gene body/promoter region of each gene in each cell. 
 
 ```{r, message = FALSE, warning=FALSE, results='hide'}
 
 X <- A549_RNA$X
 Y <- A549_ATAC$Y
 Z0 <- A549_ATAC$Z0
+
+
+treatmentTime <- c(A549_RNA$RNA_meta$treatment_time, A549_ATAC$ATAC_meta$group)
+treatmentTime[treatmentTime=="A549_0h"] <- 0
+treatmentTime[treatmentTime=="A549_1h"] <- 1
+treatmentTime[treatmentTime=="A549_3h"] <- 3
+
+type <- c(rep("scRNA-seq",nrow(A549_RNA$RNA_meta)), rep("scATAC-seq",nrow(A549_ATAC$ATAC_meta)))
 
 ```
 
@@ -100,170 +87,151 @@ cell.overlap <- intersect(colnames(Y), colnames(Z0))
 X <- as.matrix(X[gene.overlap,])
 Z0 <- as.matrix(Z0[gene.overlap, cell.overlap])
 Y <- as.matrix(Y[,cell.overlap])
+
 ```
 
-# Create bindSC object 
+Generally, you can run bindSC using above inputs. However, the feature dimension is high for single cell epigenetic profiles (for example, >100k peaks for scATAC-seq data). Here we use low-dimension representations rather than the orignal matrixs for bindSC alignment. You should perform dimension reductions (SVD) on `X` and `Z0` jointly. 
 
 ```{r , message = TRUE, warning=FALSE, results='markup'}
 
-a549 <- createBindSCobj(X=X, Z0=Z0, Y=Y)
-
-
-```
-
-# Add meta data to available bindSC object. Parameter `name` specify the name of column added.  
-
-
-```{r , message = TRUE, warning=FALSE, results='markup'}
-
-treatmentTime <- c(A549_RNA$RNA_meta$treatment_time, A549_ATAC$ATAC_meta$group)
-treatmentTime[treatmentTime=="A549_0h"] <- 0
-treatmentTime[treatmentTime=="A549_1h"] <- 1
-treatmentTime[treatmentTime=="A549_3h"] <- 3
-
-type <- c(rep("scRNA-seq",nrow(A549_RNA$RNA_meta)), rep("scATAC-seq",nrow(A549_ATAC$ATAC_meta)))
-a549 <- addMetaData(a549, treatmentTime,name="treatmentTime")
-a549 <- addMetaData(a549, type,name="type")
-
-# You can check the added column in meta data 
-
-head(a549@meta)
+out <- dimReduce( dt1 =  X, dt2 = Z0,  K = 30)
+x <- out$dt1
+z0 <- out$dt2
+y  <- dimReduce(dt1 = Y, K=30)
 
 ```
 
-### Stage 3: Align cell and features simultaneously using biCCA 
+#### Stage 3: Parameter optimization [optional]  
 
-# Key parameters to run biCCA: 
+There are two key parameters that may influence the integraton results: 1) `lambda` modality weighting factor; 2) `alpha` weighting factor of initilized gene score matrix. The `parameter optimization` step will run bindS alignment with `0<lambda<1` and `0<alpha<1`. This may take a long time if the sampe size is large.We found the defualt settings with lambda = 0.5 and alpha = 0.5 work well on most integration tasks. You can skip the `parameter optimization` step if you want to use the default settings. 
 
-- `k`: Number of canonical vectors to calculate [default `5`] 
-- `alpha`: Couple coefficent [default 0.7]
-- `block_size`: Sample/locus size for each block. This option is efficient when sample/locus size is very large (>30k) [default `5000`]
-- `num.iteration`: Maximal number of iteration [default `100`]
-- `tolerance`: Relative change ratio for imputed gene expression `Z` during iteration [default `0.01`]
-- `temp.path`: Directory storing ouput results 
-- `save`: Save the temporay files [default `FALSE`]
+To run the `parameter optimization` step, you need to prepare for the cluster annotaion information for each dataset.  
 
+```{r  parameter optimization}
 
-This process will take 25~30 mins with maximal memory usage being 15G. 
+X.clst <- treatmentTime[type=="scRNA-seq"]
+Y.clst <- treatmentTime[type=="scATAC-seq"]
 
-```{r , message = TRUE, warning=FALSE, results='markup'}
-
-a549<- runBiCCA(a549,
-                k=5, 
-                alpha =0.7, 
-                block.size =5000, 
-                num.iteration = 100, 
-                tolerance = 0.01, 
-                temp.path = "tp" )
-print("done")
-
-```
-
-# `runBiCCA` step added `biCCA` class to a549 object. There are 9 matrices inside: 
-
-- `u`: contains the canonical correlation vectors for cells from first data (`K` cells by `k` factor) 
-- `r`: contains the canonical correlation vectors for cells from second data (`L` cells by `k` factor)  
-- `s`: contains the canonical correlation vectors for features from first data (`M` genes by `k` factor)  
-- `v`: contains the canonical correlation vectors for features from second data (`N` loci by `k` factor) 
-- `Z`: the imputed gene expression of second data 
-- `delta`: relative change ratio for `Z` during iteration 
-- `cost1`: sum of top k eigenvalues of SVD for cell alignment during iteration 
-- `cost2`: sum of top k eigenvalues of SVD for feature alignment during iteration
-- `umap`: 2D-UMAP of cells from two dataset
-
-
-
-```{r, message = TRUE, warning=FALSE, results='markup'}
-
-summary(a549@biCCA)
-```
-
-### Stage 4: Jointly clustering on two modalities 
-
-Cell coordinates of two datasets in latent space are often sufficient to define joint clusters. 
-There are two `resolution` parameters. `resolution1` sets the granularity of jointly clustering, with increased values leading to a greater number of clusters. `resolution2` set the granularity of pseudo cell contruction in each cluster.  
-
-```{r, message = FALSE, warning=FALSE, results='hide',fig.height=5, fig.width=8}
-
-a549 <- JointClustering(a549, resolution1 = 0.5, resolution2 = 2)
+# Given cells from 1/3hs are not separatable in A549 dataset, we only consider pre/post treatments
+x.clst <- X.clst 
+y.clst <- Y.clst
+x.clst[x.clst>0] <- 1
+y.clst[y.clst>0] <- 1
+run <- FALSE
+if(run){
+  paraSel <- BiCCA_para_opt( X = t(x) ,
+               Y = t(y), 
+               Z0 =t(z0), 
+               X.clst = x.clst,
+               Y.clst = y.clst,
+               alpha.lst= seq(0,1,0.1), 
+               K.lst = c(5),
+               lambda.lst = seq(0,1,0.1),
+               num.iteration = 50,
+               tolerance = 0.01,
+               save = TRUE,
+               block.size = 1000
+  )
+}
 
 ```
 
-There will be two colummns `impuClst` and `pseudoCell` added on meta data 
+Use `paraSel_plot` function to show three integration metrics change with `alpha` and `lambda`. 
+Overall, the mixing alignment metric (<0.02 difference) is robust to `alpha` and `lambda` and silhouette score is very low when `alpha=1` and `lambda=1`. 
 
-```{r, message = FALSE, warning=FALSE, results='hide',fig.height=5, fig.width=8}
-head(a549@meta)
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=3, fig.width=12}
+p1 <- paraSel_plot(paraSel)
+p1
 
-```
-
-### Stage 5: Jointly profiling of gene expression, chromatin accessiblity and TF activity in pseudo-cell level.  
-This will take 5~10 mins.
-
-```{r, message = FALSE, warning=FALSE, results='hide',fig.height=5, fig.width=8}
-
-a549 <- PseudoCellProfiling(a549)
+tiff("paraSel.tiff", width=12, height =3, res =300, units = "in")
+print(p1)
+dev.off()
 
 ```
 
-`a549` will have two matrics: `a549@pseudoCell_X` and `a549@pseudoCell_Y`. Each row denotes one gene/locus and each column denotes each pseudo cell. 
 
-```{r, message = FALSE, warning=FALSE, results='hide',fig.height=5, fig.width=8}
+#### Stage 4: Run bindSC  
 
-a549@pseudoCell_X[1:5,1:5]
+We use defualt settings with lambda = 0.5 and alpha = 0.1. The iteration process will be done in ~10s.
+
+```{r runbindsc}
+
+res <- BiCCA( X = t(x) ,
+             Y = t(y), 
+             Z0 =t(z0), 
+             X.clst = x.clst,
+             Y.clst = y.clst,
+             alpha = 0.1, 
+             lambda = 0.5,
+             K = 5,
+             temp.path  = "out",
+             num.iteration = 50,
+             tolerance = 0.01,
+             save = TRUE,
+             parameter.optimize = FALSE,
+             block.size = 0)
 
 ```
 
-User can add new pseudo cell profile to `a549` object, for example, TF motif-based activity. We used `chromVAR` to calculate TF motif-based activity.   
+Check the iteration process using `plotIteration` function (optional). The first row shows the objective function costs for 3 terms separately. The fourth figure shows the total objective function over iteration time. The fifth figure figure shows the relative change of gene score matrix Z over iteration time. 
 
-```{r, message = FALSE, warning=FALSE, results='hide',fig.height=5, fig.width=8}
-tf_chromVAR <- readRDS(file="../../data/a549.chromVAR.rds")
-# make sure only pseudoCell from ATAC-seq data is loaded 
-a549 <- AddTFPseudoCellProfiling(a549, as.matrix(tf_chromVAR), a549@meta$pseudoCell[a549@meta$type=="scATAC-seq"])
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=8}
 
-a549@pseudoCell_tf[1:5,1:5]
+p2 <- plotIteration(res)
+p2
+
+tiff("iteration.cost.tiff", width=12, height =6, res =300, units = "in")
+print(p2)
+dev.off()
+```
+
+#### Stage 4: Project cells from two modalites in co-embedding spaces. `res$u` and `res$r` denote the coordinates of two modalites in co-embeddings.    
+
+
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=8}
+library(umap)
+dim(res$u)
+dim(res$r)
+umap_plt <- umap(rbind(res$u, res$r))
+umap_plt  <- data.frame("UMAP1"=umap_plt$layout[,1],
+                        "UMAP2"=umap_plt$layout[,2],
+                        "celltype" = treatmentTime,
+                        "data" = c(rep("scRNA-seq",ncol(X)),
+                                   rep("scATAC-seq",ncol(Y))))
   
-```
+xlim <- c(min(umap_plt$UMAP1), max(umap_plt$UMAP1))
+ylim <- c(min(umap_plt$UMAP2), max(umap_plt$UMAP2))
 
-Heatmap shows joint profiles of gene expression, chromatin accessbilty and TF activity 
+p11 <- UMAP_plot(meta = umap_plt[umap_plt$data=="scRNA-seq",],  alpha=1,
+                color = "celltype", xlim = xlim, ylim = ylim, mylabel = paletteDiscrete(umap_plt$celltype) ) + ggtitle("scRNA-seq")
+p12 <- UMAP_plot(meta = umap_plt[umap_plt$data=="scATAC-seq",],  alpha=1,
+              color = "celltype", xlim = xlim, ylim = ylim,mylabel = paletteDiscrete(umap_plt$celltype) )  + ggtitle("scATAC-seq")
 
-
-```{r, message = FALSE, warning=FALSE, results='hide',fig.height=7, fig.width=9}
-
-
-# you can highlight genes/peaks/TF using `anno` option  (order is not required)
-res <- PseudoCellPlot(a549, anno <- c("NR3C1", "MA0113.3_NR3C1"), top_gene = 50, top_peak = 50)
-a549 <- res$obj
-p <- res$plot
-p
+p3 <- ggarrange(p11,p12, ncol=2)
+print(p3)
 
 ```
 
 
-### Downstream analysis: comparsion among bindSC, Seurat, and Liger methods 
+#### Stage 5: Impute gene expression profiles for cells from scATAC. 
+We can also show how bindSC improves the gene score matrix after iteration process using co-assayed cells as the validation. Given most of genes are not associated with DEX-treatment, the overall correlation is stilllower than 0.1.  
 
-Three metrics are used to measure method performance since we have the cell correspondence as the gold standard.
-**For convenience, we have prepared the pre-processed results for Seurat and Liger which are ready to use.** 
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=8}
 
-- `Silhoutte coefficient` : High value means cell-type architectures is well preserved
-- `Alignment score` : High value means uniformity of mixing for two datasets in the latent space
-- `Anchor accuracy` : High value means cell correspondence can be found in cell's k-neighbor size (k ranges from 5 o 500)
+Z_impu <- impuZ(X=X, bicca = res)
+colnames(Z_impu) <- colnames(Z0)
+
+coassay_cell <- intersect(colnames(X), colnames(Y))
+p5 <- plot_geneScoreChange(X=X[,coassay_cell], Z0 = Z0[,coassay_cell], Z_impu = Z_impu[,coassay_cell])
 
 
-```{r, message = TRUE, warning=FALSE, results='markup'}
-source("../A549/eval_plot.r")
-cell_type <- a549@meta$treatmentTime
-data_type <- a549@meta$type
-result <- umap_plot(a549@biCCA$umap, cell_type, data_type)
-eval <-  method_compare(result$plt_dt, "A549")
-```
-
-```{r plot1, echo=TRUE, fig.height=6, fig.width=8}
-eval$coembedding
+tiff("matZ.improve.tiff", width=9, height =4, res =300, units = "in", compression = "lzw")
+print(p5)
+dev.off()
+p5
 
 ```
 
-```{r plot2, echo=TRUE, fig.height=4, fig.width=8}
-# Gray curve in anchor accuracy metric denotes results from random guess. 
-eval$eval
-
+```{r save}
+sessionInfo()
 ```
