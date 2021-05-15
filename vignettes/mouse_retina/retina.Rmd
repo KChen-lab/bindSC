@@ -1,0 +1,237 @@
+---
+title: "Integration of snRNA & snATAC using bindSC"
+author: "Jinzhuang Dou @ KenChen'lab (MDACC)"
+date: "February 12, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE)
+```
+
+This guide will demonstrate the usage of bindSC to jointly define cell types by leveraging mulitple single-cell modalities. Here we define cell types that incorporate both gene expression and chromatin accessibility data. The dataset is generated from the 10x multiOme of mouse retina cell altals.
+
+#### Stage 1: Load the scRNA-seq and scATAC-seq data with seurat object
+
+```{r, message= FALSE, warning=FALSE,results='hide'}
+library(bindSC)
+rna <- readRDS(file="./../../data/retina_10x.rna.RDS")
+atac <- readRDS(file="./../../data/retina_10x.atac.RDS")
+```
+
+We gate BC cell type only for demonstration
+```{r, message=FALSE,warning=FALSE, results='hide'}
+
+cell_sel <- rownames(rna@meta.data)[grepl("BC",rna@meta.data$celltype)]
+rna <- subset(rna, cells = cell_sel)
+atac <- subset(atac, cells = cell_sel)
+rna <- FindVariableFeatures(rna, nfeatures = 5000)
+DefaultAssay(atac) <- "ACTIVITY"
+atac <- FindVariableFeatures(atac, nfeatures = 5000)
+gene.use <- intersect(VariableFeatures(rna), 
+                      VariableFeatures(atac))
+X <- rna[["RNA"]][gene.use,]
+Y <- atac[["ATAC"]][]
+Z0 <- atac[["ACTIVITY"]][gene.use]
+type <- c(rep("RNA", ncol(X)), rep("ATAC", ncol(X)))
+
+a <- rowSums(as.matrix(Y))
+Y <- Y[a>50,]
+
+```
+
+We then visualize each cell, colored by cell type, from two technologies. Left is UMAP from snRNA-seq, middle is UMAP from snATAC-seq (gene-activity based),and right is from snATAC-seq (peak based). 
+
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=13}
+library(Seurat)
+library(ggplot2)
+library(ggrepel)
+
+DefaultAssay(atac) <- "ATAC"
+atac <- RunLSI(atac, n =50,features = rownames(atac)[a>50])
+atac <- FindNeighbors(atac, dims = 1:20, reduction = "lsi")
+atac <- FindClusters(atac, resolution = 0.5)
+atac <- RunUMAP(atac, reduction = "lsi", dims = 1:15)
+
+
+DefaultAssay(atac) <- "ACTIVITY"
+
+atac <- RunPCA(atac,npcs = 50)
+atac <- FindNeighbors(atac, dims = 1:20, reduction = "lsi")
+atac <- FindClusters(atac, resolution = 0.5)
+atac <- RunUMAP(atac, reduction = "pca", dims = 1:15, reduction.name="gene.umap")
+
+
+b <- X
+rownames(b)<-rownames(X)
+colnames(b) <-colnames(X)
+rna1 <- CreateSeuratObject(counts = b)
+rna1 <- ScaleData(rna1)
+rna1 <- RunPCA(rna1,npcs = 50, features = rownames(rna1))
+rna1 <- FindNeighbors(rna1, dims = 1:20, reduction = "pca")
+rna1 <- FindClusters(rna1, resolution = 0.5)
+rna1 <- RunUMAP(rna1, reduction = "pca", dims = 1:30, reduction.name="gene.umap")
+rna1@meta.data$celltype  <- rna@meta.data$celltype
+Idents(rna1) <- rna1@meta.data$celltype
+
+
+n <- nrow(rna1@meta.data)
+
+plt_dt <- rbind(rna1@reductions$gene.umap@cell.embeddings ,
+                atac@reductions$gene.umap@cell.embeddings,
+                atac@reductions$umap@cell.embeddings
+                )
+plt_dt <- as.data.frame(plt_dt)
+plt_dt$data <- c(rep("snRNA",n ), rep("snATAC (gene-based)",n ), rep("snATAC (peak-based)", n))
+plt_dt$cluster<-c(rna1@meta.data$celltype, rna1@meta.data$celltype,rna1@meta.data$celltype)
+
+
+colnames(plt_dt)<-c("UMAP1","UMAP2", "data", "cluster")
+plt_dt$data<-factor(plt_dt$data,levels=c("snRNA","snATAC (gene-based)",
+                                         "snATAC (peak-based)"))
+
+label_pos<-aggregate(. ~ cluster + data, plt_dt[,c("cluster","data",  "UMAP1","UMAP2")], median) 
+library(ggplot2)     
+p <- ggplot(plt_dt, aes(x = UMAP1, y = UMAP2,  color = cluster)) + 
+geom_point(alpha = 0.5, size =0.25)   + 
+theme(plot.title = element_text(size = 40, face = "bold")) + facet_wrap(~data, scales = "free") + 
+scale_colour_manual(values = paletteDiscrete(plt_dt$cluster)) + 
+geom_text_repel(data = label_pos, repel = TRUE,
+                    aes(label = cluster), color="black", fontface="bold",
+                    alpha = 0.75,box.padding = 0.5, point.padding = 0.1) + 
+    NoLegend() + theme(axis.text=element_blank(), axis.title=element_blank(),
+                       axis.ticks=element_blank()) +theme_classic()
+  
+p
+
+```
+
+
+Generally, you can run bindSC using full datasets. However, the feature dimension is high for single cell epigenetic profiles (for example, >100k peaks for scATAC-seq data). Here we use low-dimension representations rather than the orignal matrixs for bindSC alignment. You should perform dimension reductions (SVD) on `X` and `Z0` jointly. This will take ~2 mins
+
+```{r , message = TRUE, warning=FALSE, results='markup'}
+
+out <- dimReduce( dt1 =  X, dt2 = Z0,  K = 30)
+x <- out$dt1
+z0 <- out$dt2
+y  <- atac@reductions$lsi@cell.embeddings
+
+```
+
+#### Stage 3: Parameter optimization [optional]  
+
+There are two key parameters that may influence the integraton results: 1) `lambda` modality weighting factor; 2) `alpha` weighting factor of initilized gene score matrix. The `parameter optimization` step will run bindS alignment with `0<lambda<1` and `0<alpha<1`. THis may take a long time if the sampe size is large.We found the defualt settings with lambda = 0.5 and alpha = 0.5 work well on most integration tasks. You can skip the `parameter optimization` step if you want to use the default settings. 
+
+To run the `parameter optimization` step, you need to prepare for the cluster annotaion information for each dataset. I will skip this step and use default parameters in bindSC.   
+
+
+```{r parameter optimization}
+
+x.clst <- rna@meta.data$celltype
+y.clst <- atac@meta.data$ATAC_snn_res.0.5
+run = FALSE
+if(run){
+  paraSel <- BiCCA_para_opt( X = x1 ,
+               Y = y, 
+               Z0 =z0, 
+               tp="out",
+               X.clst = x.clst,
+               Y.clst = y.clst,
+               alpha.lst = seq(0,1,0.1), 
+               K.lst = c(15),
+               lambda.lst = seq(0,1,0.1),
+               num.iteration = 50,
+               tolerance = 0.01,
+               save = TRUE,
+               block.size = 1000
+  )
+  p1 <- paraSel_plot(paraSel)
+  p1
+}
+
+```
+
+
+#### Stage 4: Run bindSC  
+
+We use defualt settings with lambda = 0.5 and alpha = 0.5. The iteration process will be done in ~20s.
+
+```{r runbindsc}
+
+res <- BiCCA( X = t(x) ,
+             Y = t(y), 
+             Z0 =t(z0), 
+             X.clst = x.clst,
+             Y.clst = y.clst,
+             alpha = 0.5, 
+             lambda = 0.5,
+             K = 15,
+             temp.path  = "out",
+             num.iteration = 50,
+             tolerance = 0.01,
+             save = TRUE,
+             parameter.optimize = FALSE,
+             block.size = 0)
+
+```
+
+
+Check the iteration process using `plotIteration` function (optional). The first row shows the objective function costs for 3 terms separately. The fourth figure shows the total objective function over iteration time. The fifth figure figure shows the relative change of gene score matrix Z over iteration time. 
+
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=8}
+
+p2 <- plotIteration(res)
+p2
+
+```
+
+#### Stage 4: Project cells from two modalites in co-embedding spaces. 
+
+res$u` and `res$r` denote the coordinates of two modalites in co-embeddings.    
+
+
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=8}
+dim(res$u)
+dim(res$r)
+umap_plt <- umap(rbind(res$u, res$r))
+umap_plt  <- data.frame("UMAP1"=umap_plt$layout[,1],
+                        "UMAP2"=umap_plt$layout[,2],
+                        "celltype" = c(x.clst, x.clst),
+                        "data" = c(rep("scRNA-seq",length(x.clst)),
+                                   rep("scATAC-seq",length(y.clst))))
+  
+xlim <- c(min(umap_plt$UMAP1), max(umap_plt$UMAP1))
+ylim <- c(min(umap_plt$UMAP2), max(umap_plt$UMAP2))
+
+p11 <- UMAP_plot(meta = umap_plt[umap_plt$data=="scRNA-seq",],mylabel=paletteDiscrete(umap_plt$celltype),
+                color = "celltype", xlim = xlim, ylim = ylim,alpha = 1) + ggtitle("snRNA-seq")
+p12 <- UMAP_plot(meta = umap_plt[umap_plt$data=="scATAC-seq",], mylabel=paletteDiscrete(umap_plt$celltype),
+              color = "celltype", xlim = xlim, ylim = ylim,alpha = 1)  + ggtitle("snATAC-seq")
+
+p3 <- ggarrange(p11,p12, ncol=2)
+print(p3)
+
+
+```
+
+
+
+#### Stage 4: Impute gene expression profiles for cells from scATAC. 
+We can also show how bindSC improves the gene score matrix after iteration process using co-assayed cells as validation. 
+
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=8}
+
+Z_impu <- impuZ(X=rna[["RNA"]][gene.use,], bicca = res)
+p5 <- plot_geneScoreChange(X=rna[["RNA"]][gene.use,], Z0 = atac[["ACTIVITY"]][gene.use,], Z_impu = Z_impu)
+
+
+p5
+
+
+```
+
+
+```{r save image}
+sessionInfo()
+
+```
