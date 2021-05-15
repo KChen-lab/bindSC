@@ -60,7 +60,7 @@ NULL
 #'
 #' out <- BiCCA(X=X, Z0=Z0, Y=Y, 
 #'       K = 5,
-#'       alpha = 0,
+#'       alpha = 0.5,
 #'       lambda = 0.5,
 #'       X.clst = sim$X_meta$Group,
 #'       Y.clst = sim$Y_meta$Group,  
