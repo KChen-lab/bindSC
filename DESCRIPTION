@@ -21,7 +21,6 @@ Imports: umap (>= 0.2.4.0), irlba (>= 2.3.3), progress (>= 1.2.2),
 Collate: 
     'generics.R'
     'BiCCA.R'
-    'Heatmap.R'
 RoxygenNote: 7.1.1
 Suggests: knitr, rmarkdown
 VignetteBuilder: knitr
