@@ -1,173 +1,163 @@
 #!/usr/bin/env Rscript
-args = commandArgs(trailingOnly=TRUE)
-
-cisSim<-function(dt,rate){
-  result<-list()
-  gene<-rownames(dt)
-  seq<-seq(1,length(gene),1)
-  rd<-matrix(0, length(gene),1)
-  for(i in seq(1,length(gene),1)){
-    if(runif(1)<rate){rd[i,1]<-1}
-  }
-  sel<-seq[rd[,1]>0]
-  sel_permu<-sample(sel)
-  interaction<-cbind(sel,sel_permu)
-  colnames(interaction)<-c("gene1","gene2")
-  interaction<-data.frame(gene1=sel, gene2=sel_permu)
-  gene_order<-gene
-  for(i in seq(1,length(gene),1)){
-    if(rd[i,1]==0){gene_order[i]<-seq[i]}
-    else{ gene_order[i]<-interaction$gene2[interaction$gene1==seq[i]]}
-  }
-  gene_order<-as.numeric(gene_order)
-  tp<-dt[["RNA"]][gene_order]
-  rownames(tp)<-rownames(dt)
-  out<-CreateSeuratObject(counts=tp)
-  out<-AddMetaData(out, dt@meta.data)
-  result[[1]]<-out
-  result[[2]]<-gene_order
-  return(result)
-}
-
-
 library("liger")
+library("irlba")
 library("Seurat")
 library("gridExtra")
 library("splatter")
 library("scater")
 library("ggplot2")
 library("umap")
-
-rate<-args[1]
-method<-args[2]
-
-print(rate)
-print(method)
-
-params<-newSplatParams()
-params<-setParam(params, "nGenes",400)
-params.groups <- newSplatParams(batchCells = 300, nGenes = 400)
-sim3 <- splatSimulateGroups(params.groups,
-                            group.prob = c(0.33, 0.33, 0.34),
-                            verbose = FALSE)
-sim3 <- logNormCounts(sim3)
-sim <- runPCA(sim3)
+library("optparse")
 
 
-
-sim <- as.Seurat(sim, counts = "counts", data = "logcounts")
-rate<-0.9
-sim_new<-cisSim(sim,rate)
-sim_new<-sim_new[[1]]
-A<-as.matrix(sim[["RNA"]][])
-B<-as.matrix(sim_new[["RNA"]][])
-
-
-sim<-c()
-#sim$X <- A[1:800, seq(1,1000,2)]
-#sim$Z0 <- B[1:800,1:600]
-#sim$Y <- A[seq(1,1000,2),1:600]
-
-sim$X <- A
-sim$Z0 <- B
-sim$Y <- A
-
-
-sim$X <- sim$X[rowSums(sim$X)>0,]
-sim$Y <- sim$Y[rowSums(sim$Y)>0,]
-sim$Z0 <- sim$Z0[rowSums(sim$Z0)>0,]
-
-f <- intersect(rownames(sim$X), rownames(sim$Z0))
-sim$X <- sim$X[f,]
-sim$Z0 <- sim$Z0[f,]
-
-sim$X_meta <- sim_new@meta.data[colnames(sim$X),]
-sim$Y_meta <- sim_new@meta.data[colnames(sim$Y),]
-saveRDS(sim,file="sim.rds")
-
-
-
-
-cell_type<-c(sim$X_meta$Group,sim$Y_meta$Group)
-type<-c(rep("A",ncol(sim$X)), rep("B",ncol(sim$Y)))
-
-
-
-
-
-
-if(method=="liger"){
-  colnames(sim$X) <- paste(colnames(sim$X),"_ref",sep="")
-  RNA <- CreateSeuratObject(counts = sim$X-min(sim$X) , project = "test", min.features =0, min.cells = 0)
-  ATAC <- CreateSeuratObject(counts = sim$Z0 - min(sim$Z0), project = "test", min.features =0, min.cells = 0)
-
-  ligerex = seuratToLiger(list(RNA, ATAC), names = c('rna', 'atac'))
-  #ligerex = liger::normalize(ligerex)
-  ligerex@scale.data$rna <- t(as.matrix(ligerex@raw.data$rna))
-  ligerex@scale.data$atac <- t(as.matrix(ligerex@raw.data$atac))
-
-  ligerex@var.genes<-intersect(rownames(ligerex@raw.data$rna), rownames(ligerex@raw.data$atac))
-  #ligerex = scaleNotCenter(ligerex)
-  ligerex = optimizeALS(ligerex, k = 6) 
-  ligerex = quantileAlignSNF(ligerex,  dist.use="kd_tree")
-  tmp <- umap(ligerex@H.norm)
-  #ligerex <- liger::runUMAP(ligerex, distance = 'cosine', n_neighbors = 30, min_dist = 0.3)
-  #tmp<-ligerex@tsne.coords
-
-  tmp<-data.frame(UMAP1=tmp$layout[,1],UMAP2=tmp$layout[,2],Datatype=type,cell_type=cell_type)
-  write.csv(tmp,file=paste("liger",rate,".csv",sep=""))
-
-   
+addnoise <- function(dt=NULL, snr=NULL){
+  for(i in seq(1, nrow(dt),1)){
+    rowSd <- sd(dt[i,])
+    tp <- matrix(rnorm(length(dt[i,])), nrow=1,ncol = length(dt[i,]))*rowSd*snr
+    dt[i,] <- dt[i,] + tp
+  }
+  return(dt)
 }
 
-if(method=="cca"){
-  if(1){
-      genes.use <- f
-      atac<-CreateSeuratObject(counts=sim$Z0)
-      atac<-AddMetaData(atac, sim$Y_meta)
-      rna<-CreateSeuratObject(counts=sim$X)
-      rna<-AddMetaData(rna, sim$X_meta)
-      atac <- ScaleData(atac, features = genes.use, do.scale = FALSE)
-      atac <- RunPCA(atac, features = genes.use, verbose = FALSE)
-
-      transfer.anchors <- FindTransferAnchors(reference = rna, query = atac, features = f, 
-          reference.assay = "RNA", query.assay = "RNA", reduction = "cca")
-      celltype.predictions <- TransferData(anchorset = transfer.anchors, refdata = rna$Group, weight.reduction = atac[["pca"]], dims=1:5)
-      atac <- AddMetaData(atac, metadata = celltype.predictions)
-
-      refdata <- GetAssayData(rna, assay = "RNA", slot = "data")[genes.use, ]
-
-      imputation <- TransferData(anchorset = transfer.anchors, refdata = refdata, weight.reduction = atac[["pca"]], dims=1:5)
-      tmp <- atac
-      atac[["RNA"]] <- imputation
-      coembed <- merge(x =rna, y = atac)
-
-
-      # Finally, we run PCA and UMAP on this combined object, to visualize the co-embedding of both
-      # datasets
-      coembed <- ScaleData(coembed, features = genes.use, do.scale = FALSE)
-      coembed <- RunPCA(coembed, features = genes.use, verbose = FALSE)
-      coembed <- RunUMAP(coembed, dims = 1:30)
-      tmp<-coembed@reductions$umap@cell.embeddings
-  }
-
-
-  if(0){
-      cca.results <- RunCCA(
-        object1 = X1,
-        object2 = Y, 
-        standardize = TRUE,
-        num.cc = 50,
-        verbose = verbose,
-      )
-      tmp <- umap(cca.results$ccv)
-      tmp<-tmp$layout
-  }
-
-  tmp<-data.frame(UMAP1=tmp[,1], UMAP2=tmp[,2], cell_type=cell_type, Datatype=type)
-  tmp$cell_type<-as.factor(tmp$cell_type)
-  x_limit<-c(quantile(tmp$UMAP1,0.005), quantile(tmp$UMAP1,1-0.005))
-  y_limit<-c(quantile(tmp$UMAP2,0.005), quantile(tmp$UMAP2,1-0.005))
-  write.csv(tmp,file=paste("seurat",rate,".csv",sep=""))
-   
+getPCA <- function(in1=NULL){
+  in1 <- CreateSeuratObject(counts = in1)
+  in1 <- ScaleData(in1,features = rownames(in1))
+  in1 <- RunPCA(in1, features = rownames(in1))
+  myumap <- umap(in1@reductions$pca@cell.embeddings)
+  return(myumap$layout)
 }
+
+
+getGeneScore <- function(dt1 = NULL, dt2=NULL, c = NULL, gene_loci=NULL,win_size=3){
+  
+  
+  gene_mat <- dt1
+  for(i in seq(1,nrow(gene_mat),1)){
+    # identify cis-window along the genome based on gene_loci info, using win_size=3
+    start<-max(gene_loci[i]-win_size, 0)
+    end <- min(gene_loci[i]+win_size,nrow(dt2))
+    gene_activity <-colSums(dt2[seq(start,end,1),])
+    norm1 <- sum(gene_mat[i,]^2)
+    norm2 <- sum(gene_activity^2)
+    if(abs(norm1*norm2)>0){
+      gene_mat[i,] <- (1-c)*gene_mat[i,]/norm1 + c* gene_activity/norm2
+    }
+  }
+  return(gene_mat)
+}
+
+sim_XYZ <- function(cell_perct=NULL, noise=NULL, nGene=500, nPeak=1500, nCell=2000){
+  
+  params<-newSplatParams()
+  params<-setParam(params, "nGenes", nGene)
+  params.groups <- newSplatParams(batchCells = nCell, nGenes = nGene)
+  sim_tp <- splatSimulateGroups(params.groups,
+                                group.prob = cell_perct,
+                                verbose = FALSE)
+  sim_tp <- logNormCounts(sim_tp)
+  sim <- runPCA(sim_tp)
+  sim <- as.Seurat(sim, counts = "counts", data = "logcounts")
+  
+  X0 <- sim[["RNA"]][]
+  x.clst <- sim@meta.data$Group
+  y.clst <- sim@meta.data$Group
+  
+  # generate trans-peak matrix 
+  nrow <- dim(X0)[1]
+  ncol <- dim(X0)[2]
+  
+  # randomly sampling unit to generate the peak profile 
+
+  pos <- sample(nrow, nPeak-nrow, replace = TRUE)
+  peak_mat  <- addnoise(X0[pos,], snr = 0)
+  # add original gene expression matrix 
+  Y <- rbind(peak_mat, X0)
+
+  
+  # insert the gene location in the peak matrix 
+  gene_loci <- sort(sample(nPeak-nrow, nrow, replace=TRUE))
+  
+
+  # build gene expression matrix X by summing cis and trans peak signal
+  X <- X0
+  dt_x <-getPCA(in1=X)
+  tp <- data.frame("UMAP1"=dt_x[,1],"UMAP2"=dt_x[,2],"celltype"=x.clst)
+  
+  # check umap from gene expression 
+  p1<-ggplot(tp, aes(x = UMAP1, y = UMAP2, color=celltype)) + 
+    geom_point(alpha = 0.5, size =0.5)  
+  
+  
+  # peak matrix Y
+  dt_x <-getPCA(in1=Y)
+  tp <- data.frame("UMAP1"=dt_x[,1],"UMAP2"=dt_x[,2],"celltype"=x.clst)
+  # check umap from peak profile 
+  p3<-ggplot(tp, aes(x = UMAP1, y = UMAP2, color=celltype)) + 
+    geom_point(alpha = 0.5, size =0.5)  
+  
+  # model gene activity Z0 by adding noise 
+  Z0 <- getGeneScore(dt1 = X0,dt2 = Y , c = noise, gene_loci=gene_loci)
+  print(cor(as.vector(X), as.vector(Z0)))
+  rownames(X) <- paste0("gene",seq(1,nrow(X),1))
+  colnames(X) <- paste0("a",seq(1,ncol(X),1))
+  rownames(Y) <- paste0("peak",seq(1,nrow(Y),1))
+  colnames(Y) <- paste0("b",seq(1,ncol(Y),1))
+  rownames(Z0) <- paste0("gene",seq(1,nrow(Z0),1))
+  colnames(Z0) <- paste0("b",seq(1,ncol(Z0),1))
+  # check umap from gene activity Z0
+  dt_x <-getPCA(in1=Z0)
+  tp <- data.frame("UMAP1"=dt_x[,1],"UMAP2"=dt_x[,2],"celltype"=x.clst)
+  p2<-ggplot(tp, aes(x = UMAP1, y = UMAP2, color=celltype)) + 
+    geom_point(alpha = 0.5, size =0.5)  
+  
+  simData <- list()
+  simData$X <- X
+  simData$Y <- Y
+  simData$Z0 <-  Z0
+  simData$x.clst <- x.clst
+  simData$y.clst <- y.clst
+  simData$p1 <- p1
+  simData$p2 <- p2
+  simData$p3 <- p3
+  return(simData)
+}
+
+
+option_list = list(
+  make_option(c("--SNR"), type="double", default=0.1, 
+              help="noise level assigned on gene activity matrix", metavar="character"),
+  make_option(c("--nGene"), type="integer", default=500, 
+              help="number of genes", metavar="character"),
+  make_option(c("--nPeak"), type="integer", default=1500, 
+              help="number of peaks", metavar="character"),
+  make_option(c("--nCell"), type="integer", default=500, 
+              help="number of cells", metavar="character"),
+  make_option(c("--out"), type="character", default="out", 
+              help="output directory name [default= %default]", metavar="character")
+) 
+opt_parser = OptionParser(option_list=option_list)
+opt = parse_args(opt_parser)
+
+
+#prob_vec <- c(0.3,0.3,0.3,0.2,0.2,0.2,0.1,0.1,0.1,0.05,0.05,0.05) # 12 populaiton with different sample size
+prob_vec <- c(0.3,0.3,0.3)  # three populaitons with balanced sample size
+prob_vec <- prob_vec/sum(prob_vec)
+
+# The noise level is assigned on gene activity matrix and cis/trans effect matrix
+
+#noise <- 0.1
+#nGene <- 500
+#nPeak <- 1500
+#nCell <- 2000
+
+print(opt)
+noise <-opt$SNR
+popSize <- length(prob_vec)
+out_dir <- paste0("Ncell",opt$nCell,"_PopSize",opt$popSize,"_nGene",opt$nGene,"_nPeak",opt$nPeak,"_noise",noise)
+simData <- sim_XYZ(cell_perct= prob_vec, noise=noise, nGene=opt$nGene, nPeak=opt$nPeak, nCell=opt$nCell)
+#simData <- sim_XYZ(cell_perct = prob_vec, noise=noise)
+saveRDS(simData,file=paste0(opt$out,"/" , out_dir,".RDS"))
+
+
+
+
