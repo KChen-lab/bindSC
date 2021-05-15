@@ -1,107 +1,121 @@
 ---
-title: "CITE_seq"
-author: "douj"
-date: "February 9, 2021"
+title: "Integration of scRNA & cytof data using bindSC"
+author: "Jinzhuang Dou@Kenchen'lab (MDACC)"
+date: "March 1, 2021"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-```
-
-This is used to show bindSC performance on aligning RNA and cytof data using CITE-seq data. 
-
-
-
-```{r load library/packages}
-source("../../bindsc/BiCCA.R")
-source("../../bindsc/generics.R")
 
 ```
 
-## Load PBMC dataset 
+This guide will demonstrate the usage of bindSC to align scRNA-seq and protein data. The test dataset is from bone marrow (BM) samples measured using the CITE-seq technology(Stuart et al., Cell 2019 [https://www.cell.com/cell/fulltext/S0092-8674(19)30559-8]).
 
-```{r load data, echo=FALSE}
+#### Stage 1: Load the scRNA-seq and protein data
+Remove cells that have no variation in initilized gene score matrix Z
+
+```{r load data, message = FALSE, warning=FALSE, results='hide'}
+
+library(bindSC)
+
 bm <- readRDS(file="../../data/cite_seq.RDS")
 summary(bm)
 dim(bm$RNA)
 dim(bm$Protein)
 dim(bm$Z)
+tp <- colSums(as.matrix(bm$Z))
+cell_sel <- which(tp>2)
+N <- length(cell_sel)
+y <- bm$RNA[, cell_sel]
+x <- bm$Protein[, cell_sel]
+z0 <- bm$Z[,cell_sel]
+dim(x)
+dim(y)
+dim(z0)
 
-# downsampling 
-N <- ncol(bm$RNA)
-Y <- bm$RNA[,seq(1,N,10)]
-X <- bm$Protein[,seq(1,N,10)]
-Z0 <- bm$Z[,seq(1,N,10)]
+
 ```
-```{r run bindSC }
 
-source("../../bindsc/BiCCA.R")
-
-X.clst <- as.character(bm$meta$celltype2)[seq(1,N,10)]
-Y.clst <- as.character(bm$meta$celltype2)[seq(1,N,10)]
+Given the feature dimension of X and Z0 is very low (=24), we use orignal profiles for integration in this task.
 
 
-paraSel <- BiCCA_para_opt( X = X ,
-             Y = Y, 
-             Z0 =Z0, 
-             tp="out",
-             X.clst = X.clst,
-             Y.clst = Y.clst,
-             alpha.lst = seq(0,1,0.1), 
-             K.lst = c(10),
-             lambda.lst = seq(0,1,0.1),
+#### Stage 2: Parameter optimization [optional]  
+
+There are two key parameters that may influence the integraton results: 1) `lambda` the modality weighting factor; 2) `alpha` the weighting factor of initilized gene score matrix. The `parameter optimization` step will run bindS alignment with `0<lambda<1` and `0<alpha<1`. This may take a long time if the cell number is large. You can use use the downsampling procedure to run this step. We found that the defualt settings with lambda = 0.5 and alpha = 0.5 work well on most integration tasks. The `parameter optimization` step could be skipped if you want to use the default settings. 
+
+To run the `parameter optimization` step, you need to prepare for the cluster annotaions for each dataset. 
+
+
+```{r parameter optimization, message = FALSE, warning=FALSE, results='hide'}
+
+x.clst <- bm$meta$celltype2[cell_sel]
+y.clst <- bm$meta$celltype2[cell_sel]
+run = FALSE
+if(run){
+  down_sample <- seq(1,N,10)
+  paraSel <- BiCCA_para_opt( X = x[, down_sample] ,
+               Y = y$dt1[, down_sample], 
+               Z0 =z0[, down_sample], 
+               tp="out",
+               X.clst = x.clst[down_sample],
+               Y.clst = y.clst[down_sample],
+               alpha.lst = seq(0,1,0.1), 
+               K.lst = c(10),
+               lambda.lst = seq(0,1,0.1),
+               num.iteration = 50,
+               tolerance = 0.01,
+               save = TRUE,
+               block.size = 1000
+  )
+  p1 <- paraSel_plot(paraSel)
+  p1
+}
+
+```
+
+
+#### Stage 4: Run bindSC  
+
+We use  lambda = 0.7 and alpha = 0.1 (alpah<0.3 has the best peformance). The iteration process will be done in ~5 mins .
+
+```{r runbindsc, message = FALSE, warning=FALSE, results='hide'}
+
+res <- BiCCA( X = x ,
+             Y =  y, 
+             Z0 =z0, 
+             X.clst = x.clst,
+             Y.clst = y.clst,
+             alpha = 0.1, 
+             lambda = 0.7,
+             K = 15,
+             temp.path  = "out",
              num.iteration = 50,
              tolerance = 0.01,
              save = TRUE,
-             block.size = 1000
-)
-
-
-```
-
-
-
-```{r, message = FALSE, warning=FALSE, results='hide',fig.height=3, fig.width=12}
-source("../../bindsc/generics.R")
-p1 <- paraSel_plot(paraSel)
-p1
-
-tiff("paraSel.tiff", width=12, height =3, res =300, units = "in")
-print(p1)
-dev.off()
+             parameter.optimize = FALSE,
+             block.size = 0)
 
 ```
-# The decompostion has the best alignment/silhouette scores when alpha<0.5. The decompostion is relatively robust to 
-# lambda exccept for alpha=0. Overall, we set alpha = 0.1 and lambda = 0.7 as the optimal parameter combination. 
-# Next we will show results with alpha = 0.1 and lambda = 0.7
 
-```{r, message = FALSE, warning=FALSE, results='hide',fig.height=5, fig.width=9}
-source("../../bindsc/BiCCA.R")
-source("../../bindsc/generics.R")
-  res <- BiCCA(X = X,
-               Y = Y, 
-               Z0 =Z0, 
-               alpha =0.1, 
-               lambda = 0.7, 
-               X.clst = X.clst,
-               Y.clst = Y.clst,
-               temp.path  = "./out",
-               K = 10, 
-               num.iteration = 50,
-               tolerance = 0.01,
-               save = TRUE)
+You can check the iteration process using `plotIteration` function (optional). The first row shows objective function costs for three terms separately. The fourth figure shows the total objective function cost over the iteration time. The fifth figure shows the relative change of gene score matrix Z over the iteration time. 
+
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=8}
 
 p2 <- plotIteration(res)
 p2
 
+tiff("iteration.cost.tiff", width=12, height =6, res =300, units = "in")
+print(p2)
+dev.off()
 ```
-# The decompostion stops after the 13rd iteration. We will see how UMAP looks like when the iteration process stops
+
+
+#### Stage 4: Project cells from two modalites in the co-embedding space. `res$u` and `res$r` denote coordinates of two modalites in co-embeddings.  
+ 
 
 ```{r, message = FALSE, warning=FALSE, results='hide',fig.height=6, fig.width=12}
-alpha <- 0.1
-lambda <- 0.7 
-celltype <- as.character(bm$meta$celltype2[seq(1,N,10)])
+celltype <- as.character(bm$meta$celltype2[cell_sel])
 umap_plt <- umap(rbind(res$u, res$r))
 umap_plt  <- data.frame("UMAP1"=umap_plt$layout[,1],
                         "UMAP2"=umap_plt$layout[,2],
@@ -113,33 +127,39 @@ xlim <- c(min(umap_plt$UMAP1), max(umap_plt$UMAP1))
 ylim <- c(min(umap_plt$UMAP2), max(umap_plt$UMAP2))
 
 p11 <- UMAP_plot(meta = umap_plt[umap_plt$data=="protein",], 
-                color = "celltype", xlim = xlim, ylim = ylim)
+                color = "celltype", xlim = xlim, ylim = ylim, mylabel = paletteDiscrete(umap_plt$celltype) )
 p12 <- UMAP_plot(meta = umap_plt[umap_plt$data=="RNA",], 
-              color = "celltype", xlim = xlim, ylim = ylim)
+              color = "celltype", xlim = xlim, ylim = ylim, mylabel=paletteDiscrete(umap_plt$celltype))
 
 p11 <- p11 + ggtitle("Protein")
 p12 <- p12 + ggtitle("RNA")
 
 p3 <- ggarrange(p11,p12, ncol=2)
 print(p3)
-
 ```
-# Given the cell correspondence between RNA and Protein is known, we can validate whether the iteration process 
-# has improved the gene score matrix Z. 
+
+Given the cell correspondence between two datasets is known, we can validate the imputation accuracy of the gene score matrix Z derived from bindSC. 
+
 ```{r, message = FALSE, warning=FALSE, results='hide',fig.height=6, fig.width=12}
 
-p5 <- plot_geneScoreChange(X=X, Z0 = Z0, Z_impu = res$Z_est)
+p5 <- plot_geneScoreChange(X=x, Z0 = z0, Z_impu = res$Z_est)
 
 p5
 
 
+tiff("matZ.improve.tiff", width=9, height =4, res =300, units = "in", compression = "lzw")
+print(p5)
+dev.off()
+p5
 ```
 
 
-# Show imputation accuracy after bindSC for each protein markers 
+
+Next, we shos the imputation accuracy after bindSC for each protein marker. bindSC increases the accuracy of expression profile for all protein markers. The imputed gene expresion profile could be used to explore interaction between gene expresion and protein level. 
+
 ```{r, message = FALSE, warning=FALSE, results='hide',fig.height=6, fig.width=6}
-cor1 <- diag(cor(as.matrix(t(X)),as.matrix(t(Z0)), method = "pearson"))
-cor2 <- diag(cor(as.matrix(t(X)),as.matrix(t(res$Z_est)), method = "pearson"))
+cor1 <- diag(cor(as.matrix(t(x)),as.matrix(t(z0)), method = "pearson"))
+cor2 <- diag(cor(as.matrix(t(x)),as.matrix(t(res$Z_est)), method = "pearson"))
 plt_dt <- data.frame("protein"=names(cor1),
                      "cor1"=cor1, "cor2"=cor2)
 p51 <- ggscatter(plt_dt, x="cor1", y = "cor2", color = "protein", 
@@ -150,44 +170,16 @@ p51 <- ggscatter(plt_dt, x="cor1", y = "cor2", color = "protein",
  p51
  
  
+ 
+tiff("imputAccuracy.improve.tiff", width=4, height =4, res =300, units = "in",compression = "lzw")
+print(p51)
+dev.off()
+
+ 
   
 ```
 
-# show key protein markers change after bindsc alignment 
-```{r, message = FALSE, warning=FALSE, results='hide',fig.height=8, fig.width=16}
-marker_lst <- c("CD19","CD14","CD11c","CD28")
-True <- X[marker_lst,]
-init <- Z0[marker_lst,]
-impu <- res$Z_est[marker_lst,]
-p_lst <-c()
-for(i in seq(1, length(marker_lst),1)){
-  True[i,] <- True[i,]/max(True[i,])
-  init[i,] <- init[i,]/max(init[i,])
-  plt_dt <- data.frame("True"=True[i,], "Est"=init[i,])
-  p61 <- ggplot(plt_dt, aes(x=True, y=Est) ) + geom_bin2d() + theme_classic() + 
-  xlab("True protein level") + ylab("Initilized gene score matrix") + 
-  ggtitle(marker_lst[i])+ 
-  scale_fill_gradient(low="lightblue1",high="darkblue",trans="log10") 
-  
-  
-  impu[i,] <- (impu[i,]-min(impu[i,]))/max(impu[i,])
-  plt_dt <- data.frame("True"=True[i,], "Est"=impu[i,])
-  p62 <- ggplot(plt_dt, aes(x=True, y=Est) ) + geom_bin2d() + theme_classic() + 
-  xlab("True protein level") + ylab("Imputed gene score matrix") + 
-  ggtitle(marker_lst[i])+
-  scale_fill_gradient(low="lightblue1",high="darkblue",trans="log10") 
-  p_lst[[i*2-1]] <- p61
-  p_lst[[2*i]] <- p62
-  
-}
 
-p6 <- ggarrange(p_lst[[1]],p_lst[[3]],p_lst[[5]],p_lst[[7]],
-                p_lst[[2]],p_lst[[4]],p_lst[[6]],p_lst[[8]],ncol=4, nrow=2)
-print(p6)
-
-
-```
 ```{r save results }
-save.image(file="PBMC.3k.RDS")
 sessionInfo()
 ```
