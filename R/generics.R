@@ -1,21 +1,4 @@
 
-library(Seurat)
-library(cluster)
-library(umap)
-library(e1071)
-library(Matrix)
-library(progress)
-library(irlba)
-library(DescTools)
-library(ggpubr)
-library(ggrepel)
-library(corrplot)
-library(FNN)
-
-
-
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Functions
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -84,14 +67,7 @@ FeatureScale <- function(X){
   }
   return(X)
 }
-#' Matrix Crossproduct
-#' Given a list of matrices x1, x2, ... , xn as arguments, return a matrix cross-product. 
-#' x1%*%x2%*%xn
-#' @param lst list of matrix
-#'
-#' @return returns crossproduct
-#'
-#'
+
 
 is.sparseMatrix <- function(x) is(x, 'sparseMatrix') 
 
@@ -405,7 +381,8 @@ PC_optimize <- function(x=NULL){
 
 
 
-UMAP_plot <- function(meta = NULL, color=NULL, xlim=NULL, ylim=NULL, showLabel=TRUE, title=NULL){
+UMAP_plot <- function(meta = NULL, color=NULL, xlim=NULL, alpha = 0.1,
+                      ylim=NULL, showLabel=TRUE, title=NULL, mylabel=NULL){
 
   library(ggrepel)
   #meta <- x@meta
@@ -417,27 +394,20 @@ UMAP_plot <- function(meta = NULL, color=NULL, xlim=NULL, ylim=NULL, showLabel=T
   y_min <- ylim[1]
   y_max <- ylim[2]
 
- 
+  label_pos<-aggregate(. ~ label, dt, median)
   p1 <- ggplot(dt, aes(x = UMAP1, y = UMAP2,  color = label)) + 
-    geom_point(alpha = 0.5, size =0.5)   + 
-    scale_colour_manual(values = paletteDiscrete(dt$label)) + 
+    geom_point(alpha = alpha, size =0.5)   + 
+    scale_colour_manual(values = mylabel) + 
     xlim(x_min, x_max) + 
     ylim(y_min, y_max) + 
-    theme_bw()  +  theme(legend.position = "none")
-
-
-  if(showLabel){
-    
-     label_pos<-aggregate(. ~ label, dt, median)
-    
-     #p1 <- p1 + annotate("text", label = label_pos$label1, x = label_pos$UMAP1, 
-     #   y = label_pos$UMAP2, size = 4, colour = "black") 
-     p1 <- p1 + geom_text_repel(data = label_pos, 
-        aes(label = label),
-        color = "black",
-        point.padding =0.2) 
-        
-  }
+    theme_classic()  +  theme(legend.position = "none") + 
+    geom_text_repel(data = label_pos, repel = TRUE,
+                    aes(label = label), color="black", fontface="bold",
+                    alpha = 0.75,box.padding = 0.5, point.padding = 0.1)  + 
+    theme(axis.text=element_blank(), axis.title=element_blank(),
+                       axis.ticks=element_blank()) 
+  
+  
     
   return(p1)
 
@@ -562,6 +532,22 @@ calc_silhouette_coef<-function(x = NULL, clst = NULL){
   return(out)
 }
 
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Functions
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#' L2 normalize the columns (or rows) of a given matrix
+#' @param mat Matrix to cosine normalize
+#' @param MARGIN Perform normalization over rows (1) or columns (2)
+#'
+#'
+#' @return returns l2-normalized matrix
+#' @import FNN cluster DescTools
+#'
+
+
 calc_alignment_score<-function(x = NULL,  clst = NULL, k = NULL){
 
   #colnames(x)[n] <- "cluster"
@@ -628,7 +614,7 @@ initial.membership = NULL, weights = NULL, node.sizes = NULL) {
     #remove zeroes from rows of matrix and return vector of length edges
   }
 
-  ##convert to python numpy.ndarray, then a list
+  ##convert to pyton numpy.ndarray, then a list
   adj_mat_py <- r_to_py(adj_mat)
   adj_mat_py <- adj_mat_py$tolist()
 
@@ -910,7 +896,7 @@ paletteContinuous <- function(
   pal <- bindSCPalettes[[set]]
   palOut <- colorRampPalette(pal)(n)
   
-  if(reverse){
+  if(reverse){  
     palOut <- rev(palOut)
   }
 

@@ -10,11 +10,9 @@ NULL
 #' Assuming there are two matrices X (M features by K samples) and Y (N features by L samples), we want to 
 #' find the correlation in feature and sample levels between X and Y. 
 #' Standard CCA could not handle this case because it requires that there should be at least one 
-#' dimension shared by two datasets. The BiCCA function introudces one transition matrix Z (M features by L
-#' samples) to bridge X with Y. The transition matrix Z is solved by maximalizing correlation between (X, Z) 
-#' in sample level and correlation between (Z, Y) in feature level simultaneously. Then sample/feature level 
-#' correlation can be obtained by applying standard CCA on (X, Z) and (Y, Z), respectively.
-
+#' dimension shared by two datasets. The BiCCA function introudces one gene activity matrix Z (M features by L
+#' samples) to bridge X with Y. The gene score matrix Z is solved by maximalizing correlation between (X, Z) 
+#' in cell level and correlation between (Z, Y) in feature level simultaneously. 
 
 #'
 #' @param X First matrix (M features by K samples)
@@ -23,29 +21,32 @@ NULL
 #' @param alpha Couple coefficient to assign weight on initilized gene activity matrix Z0 [default 0.5]. alpha is set to [0 1). 
 #' If alpha is set to 0, the initilized Z0 will not be involved after the 2nd iteration. 
 #' @param lambda Couple coefficient to assign a weight factor to multi-objective function [default 0.5]. lambda is set to (0 1).
-#' If lambda is set to 0, the first modality will not be involved during the iteration process. 
-#' If lambda is set to 1, the second modality will not be involved during the iteration process. In this case, biCCA will reduces to traditional CCA.
+#' If lambda is close to 0, the first modality will not be involved during the iteration process. 
+#' If lambda is close to 1, the second modality will not be involved during the iteration process. In this case, biCCA will reduce to the traditional CCA.
 #' @param X.clst Cluster ID vector for the first matrix 
 #' @param Y.clst Cluster ID vector for the second matrix 
 #' @param K Number of canonical vectors to calculate in low-dimension space [default 10]
 #' @param num.iteration Maximal number of iteration [default 100]
-#' @param tolerance  Relative change ratio for frobenius norm of matrix Z during iteration [default 0.05]
-#' @param block.size Sample/feature size for each block, only works when bigMemory is set to TRUE
+#' @param tolerance  Relative change ratio for frobenius norm of matrix Z during iteration [default 0.01]
+#' @param block.size Block size for SVD decomposition. This will reduce time and memory usage when cell number is large
 #' @param save  Save the temporay files [default FALSE]
 #' @param temp.path Folder that is used to store temporary files. Only works when option save is set to be TRUE [default NULL]
 #'
 #' @return Returns the object with list:
 #'
-#' @return * `Z` - contains the estimated transition matrix (M features by L samples)
+#' @return * `Z_est` - contains the updated gene score matrix (M features by L samples)
 #' @return * `u` - contains the canonical correlation vectors for X (K samples by K factor) 
 #' @return * `r` - contains the canonical correlation vectors for Z (sample level)(L samples by K factor) 
 #' @return * `s` - contains the canonical correlation vectors for Z (feature level)(M features by K factor) 
 #' @return * `v` - contains the canonical correlation vectors for Y (N features by K factor)
+#' @return * `cost_l` - the cost function on the first modality penalty term 
+#' @return * `cost_r` - the cost function on the second modality penalty term 
+#' @return * `cost_z0` - the cost function on the the initialized gene score penalty
 #' @return * `delta` - relative change ratio for frobenius norm of matrix Z during iteration
 #'
 #'
 #' @export
-#' @import umap irlba progress Matrix rdist ggplot2 bigstatsr
+#' @import umap irlba progress Matrix ggplot2 FNN cluster entropy DescTools 
 
 #'
 #' @author Jinzhuang Dou, \email{Dou1@mdanderson.org} \email{jinzhuangdou198706@gmail.com}
@@ -58,15 +59,16 @@ NULL
 #' Z0 <- sim$Z0
 #'
 #' out <- BiCCA(X=X, Z0=Z0, Y=Y, 
-#'       K = 5, X.clst =  sim$X_meta$Group,
-#'       Y.clst =  sim$Y_meta$Group,
-#'       alpha = 0.5,
-#'       lambda = 0,
+#'       K = 5,
+#'       alpha = 0,
+#'       lambda = 0.5,
+#'       X.clst = sim$X_meta$Group,
+#'       Y.clst = sim$Y_meta$Group,  
 #'       num.iteration = 100, 
-#'       temp.path = "./tp",
+#'       temp.path = "./out",
 #'       tolerance = 0.01, 
 #'       save = TRUE, 
-#'       block.size = 500)
+#'       block.size =  0)
 
 
 
@@ -84,7 +86,7 @@ BiCCA <- function(
     num.iteration = 100, 
     tolerance = 0.01,  
     save = FALSE, 
-    block.size = 5000){
+    block.size = 0){
 
     start_time <- Sys.time()
     if(parameter.optimize == FALSE){
@@ -158,13 +160,6 @@ BiCCA <- function(
               total = num.iteration, clear = FALSE, width= 60)
     }
     
-    #if(parameter.optimize == FALSE){
-    #    message(paste(current_time, "  KNN clustering on X ",sep=""))
-    #    sink("temp.txt")
-    #    invisible(capture.output (X_clst <- knn_cluster(X, resolution = 0.5)))
-    #    sink()
-    #}
-   
 
     if(parameter.optimize == FALSE){
         message(paste(current_time, "  Decomposing started!",sep=""))
@@ -176,20 +171,26 @@ BiCCA <- function(
         gc()
         if(parameter.optimize == FALSE) {pb$tick()}
     
-        in1 <- crossprod(X, Z0)
-        cca_l <-  irlba(in1, nv = K , nu = K)
+        if(block.size==0){
+          in1 <- crossprod(X, Z0)
+          cca_l <-  irlba(in1, nv = K , nu = K)
+        }
+        else{
+          cca_l <- irlba_block(x = X, y=Z0, k= K, blocksize = block.size)
+        }
+
         xu <- crossprod(t(X), cca_l$u)
         zv <- crossprod(t(Z0), cca_l$v)
         z_l <- crossprod(t(xu), t(cca_l$v))
        
-        #cell_align <- celltype_assign(train_x  = cca_l$u, train_y = X.clst, test = cca_l$v, test_clst = Y.clst)
-        #rd_cell_alignment[[cnt]] <- cell_align$score
-        #rd_cell_alignment_mean <- c(rd_cell_alignment_mean, mean(cell_align$alignment))
+        if(block.size==0){
+           in2 <- crossprod(t(Z0), t(Y))
+           cca_r <- irlba(in2, nv = K, nu = K)
+        }
+        else{
+           cca_r <- irlba_block(x = t(Z0), y=t(Y), k = K, blocksize = block.size)
+        }
 
-        
-
-        in2 <- crossprod(t(Z0), t(Y))
-        cca_r <- irlba(in2, nv = K, nu = K)
         zs <- crossprod(Z0, cca_r$u)
         yt <- crossprod(Y, cca_r$v) 
         z_r <- crossprod(t(cca_r$u), t(yt))
@@ -214,7 +215,8 @@ BiCCA <- function(
         rd_cost_z0 <- c(rd_cost_z0, cost_z0)
         rd_cost_all <- c(rd_cost_all, cost_all)
        
-
+        cca_l$u <- L2Norm(cca_l$u)
+        cca_l$v <- L2Norm(cca_l$v)
 
         if(save==TRUE && !is.na(temp.path)){
             if (!dir.exists(temp.path)){
@@ -256,12 +258,18 @@ BiCCA <- function(
              message(paste(current_time, " Done! The decomposition is converged."))
         }
     }
-    rd_cell_alignment <- calc_score(dt1 = cca_l$u, dt2 = cca_l$v, label1 = X.clst,  label2 = Y.clst)
+    #rd_cell_alignment <- calc_score(dt1 = cca_l$u, dt2 = cca_l$v, label1 = X.clst,  label2 = Y.clst)
+ 
+
+   
+    if(!is.na(colnames(X)[1])) {rownames(cca_l$u) <- colnames(X)}
+    if(!is.na(colnames(Y)[1])) {rownames(cca_l$v) <- colnames(Y)}
+
     out<-list(
               "u" = cca_l$u, 
               "r" = cca_l$v,
               "s" = cca_r$u,
-              "v" = cca_r$v,  
+              "v" = cca_r$v,
               "Z_est" = Z0,   
               "cost_l" =  rd_cost_l,
               "cost_r" =  rd_cost_r,
@@ -270,7 +278,10 @@ BiCCA <- function(
               "delta" = rd_delta,
               "score" = rd_cell_alignment )
 
-    saveRDS(out, file=paste(temp.path,"/out_final.rds",sep=""))
+
+    if(save){
+      saveRDS(out, file=paste(temp.path,"/out_final.rds",sep=""))
+    }
     return(out)
 }
 
@@ -443,6 +454,96 @@ BiCCA_para_opt <-function(X=NULL,
 
 
 
+
+
+#R code for split-and-merge approach for Single Value Decomposition(SVD)
+# X is our data variable
+# svd(t(X)%*%Y)
+
+ irlba_block <- function(x=NULL, y=NULL, blocksize=NULL, k = k){
+
+    #x <- as.matrix(t(x))
+    blocksize <- min(c(blocksize, ncol(x)))
+    x <- t(x)
+
+    m <- nrow(x)
+    Y <- NULL               #Initializing the end Y matrix
+    U1 <- NULL              #Initializing the U bar matrix form X
+    xi <- NULL
+    X1 <- NULL
+
+    i <- 1    
+    part_len <- blocksize
+
+    #loop through the data
+    block_cnt <- 0
+    T <- 25
+    #T <- nrow(x)
+    while ( i <= m ){
+      block_cnt <- block_cnt + 1
+      
+      if( i+part_len-1 < m ){
+        xi <- x[i:(i+part_len-1), ]%*%y       
+      }
+      else if(i != m) {
+        xi <- x[i:m, ]%*%y
+      }
+      else{
+        xi <-matrix((x[i,]), nrow = 1) %*%y     
+      }
+      fin<-NULL
+
+      xi.svd <- irlba(xi, nv=T)
+      #xi.svd <- svd(xi)                     #Performing svd on individual submatrices
+      if(is.null(U1)){                      #When first submatrix is being used
+        #fin<-xi.svd$u
+        U1 <- xi.svd$u
+      }
+      else                                 #We need to add U matrices diagonally
+      {
+          U1<-rbind(U1,xi.svd$u)
+      }
+      #U1 <- fin                  #Updating U bar matrix
+      d<-diag(xi.svd$d, nrow = length(xi.svd$d))
+      yi <- d %*% t(xi.svd$v)    #Creating y=v*d
+      Y <- rbind(Y,yi)           #Updating the y matrix
+      i <- i+part_len
+    }
+
+    y.svd <- svd(Y)
+    #y.svd <- svd(as.matrix(Y))
+    #Assigning final matrices to a random variable to output.
+    X1$u <- NULL
+    for(j in seq(1,block_cnt,1)){
+      row_start <- (j-1)*blocksize + 1
+      row_end <- j*blocksize
+      if(row_end >= nrow(U1)){
+          row_end <- nrow(U1)
+      }
+      col_start <- (j-1)*T + 1 
+      col_end <- j*T
+      if(col_end >= nrow(y.svd$u)){
+          col_end <- nrow(y.svd$u)
+      }
+      tp <- U1[seq(row_start,row_end,1),]%*%y.svd$u[seq(col_start,col_end,1),]
+      X1$u <- rbind(X1$u, tp)
+    }
+
+    #X1$u <- U1 %*% y.svd$u
+    X1$u <- X1$u[,seq(1,k,1)]
+    X1$v <- y.svd$v[,seq(1,k,1)]
+    #X1$d <- diag(y.svd$d, nrow = length(y.svd$d))
+    X1$d <- y.svd$d[seq(1,k,1)]
+     #Returning the three matrices through X1 
+    return(X1)
+  
+}
+
+
+
+
+
+
 RunModularityClusteringCpp <- function(SNN, modularityFunction, resolution, algorithm, nRandomStarts, nIterations, randomSeed, printOutput, edgefilename) {
     .Call('_Seurat_RunModularityClusteringCpp', PACKAGE = 'Seurat',
      SNN, modularityFunction, resolution, algorithm, nRandomStarts, 
@@ -450,6 +551,24 @@ RunModularityClusteringCpp <- function(SNN, modularityFunction, resolution, algo
 }
 
 
+label_transfer <- function(dt1 = NULL, X.clst = NULL, dt2 = NULL){
+    model <- svm(dt1, as.factor(X.clst), probability=TRUE)
+    pred <- predict(model, dt2, probability=TRUE)
+    out <- attr(pred, "probabilities")
+   
+    celltype <- rep("unknown", nrow(out))
+    prob_max <- rep(0, nrow(out))
+    names <- colnames(out)
+    for(i in seq(1,nrow(out),1)){
+          tp <- out[i,]
+          pos <- which(tp==max(tp),arr.ind = TRUE)
+          celltype[i] <- names[pos]
+          prob_max[i] <- tp[pos]
+    }
+    prob <- data.frame("celltype"=celltype, "Prob_max"=prob_max)
+    rownames(prob) <- rownames(dt2)
+    return(prob)
+}
 
 calc_score <- function(dt1 = NULL, dt2 = NULL, label1 = NULL, label2 = NULL ){
 
@@ -491,8 +610,8 @@ preCheck <- function(X=NULL,
     if (!is.matrix(Y) && !is.sparseMatrix(Y)){
         stop("Please input Y as a matrix!")
     }
-    if(block.size <=100){
-        stop("Please set bloc.size more than 100!")
+    if(block.size <=100 & block.size >0){
+        stop("Please set block.size more than 100 or set it to 0!")
     }
     if(length(alpha)==1){
         if(alpha < 0 || alpha >1){
