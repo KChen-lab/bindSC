@@ -77,7 +77,7 @@ For usage examples and guided walkthroughs, check the `vignettes` directory of t
 
 * [Integrating scRNA-seq and spatial transcriptomics on mouse brain cortex dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/SC_ST/SC_ST.html) 
 
-* [Integrating scRNA-seq and protein](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/CITE-seq.html)
+* [Integrating scRNA-seq and protein](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/CITE_seq.html)
 
 We also provided comparison of bindSC with available tools including Seurat, LIGER, and Harmony on above 4 benchmarking datasets
 
