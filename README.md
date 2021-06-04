@@ -85,8 +85,6 @@ We also provided comparison of bindSC with available tools including Seurat, LIG
 
 * [Comparison on mouse retina dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/method_eval/method_eval.retina.html)
 
-* [Comparison on mouse brain cortex dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/pbmc.html)
-
 * [Comparison on CITE-seq dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/method_eval/method_eval.citeseq.html)
 
 
