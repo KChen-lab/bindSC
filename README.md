@@ -79,7 +79,7 @@ For usage examples and guided walkthroughs, check the `vignettes` directory of t
 
 * [Integrating scRNA-seq and protein](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/CITE-seq/CITE_seq.html)
 
-We also provided comparison of bindSC with available tools including Seurat, LIGER, and Harmony on above 4 benchmarking datasets
+We also provided comparison of bindSC with available tools including Seurat, LIGER, and Harmony on above 3 benchmarking datasets
 
 * [Comparison on A549 dataset](https://htmlpreview.github.io/?https://github.com/KChen-lab/bindSC/blob/master/vignettes/method_eval/method_eval.A549.html)
 
