@@ -13,10 +13,17 @@ knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 
 This guide will demonstrate the usage of bindSC to jointly define cell types by leveraging mulitple single-cell modalities. Here we define cell types that incorporate both gene expression and chromatin accessibility data. The dataset is generated from the sci-CAR technology (Cao et al., 2018, science).
 
-#### Stage 1: Load the scRNA-seq and scATAC-seq data
+#### Stage 1: Load the sciRNA-seq and sciATAC-seq data
 
 **For convenience, we have prepared the pre-processed data which are ready to use.** 
-User can refer to `A549_preprocess.ATAC.html` and `A549_preprocess.RNA.html` for the details of running the pre-processing workflow (It will take 10 ~ 20 mins). For RNA data, there are 6,005 cells measured on 4,759 genes (`A549_RNA$X`). For ATAC data, there are 3,628 cells measured on 13,515 genes (gene activity estimated from peak; `A549_ATAC$Z0`) and 24,953 peaks (`A549_ATAC$Y`).  
+User can refer to `A549_preprocess.ATAC.html` and `A549_preprocess.RNA.html` for the details of running the pre-processing workflow (It will take 10 ~ 20 mins). For RNA data, there are 6,005 cells measured on 4,759 genes (`A549_RNA$X`). For ATAC data, there are 3,628 cells measured on 13,515 genes (gene activity estimated from peak; `A549_ATAC$Z0`) and 24,953 peaks (`A549_ATAC$Y`). User can download the preprocessed sci-RNA data from 
+ https://drive.google.com/file/d/1tjMA9yERXYBx-GKKrGORKF1-4Zs9xScM/view?usp=sharing
+
+ The preprocessed sci-ATAC data from 
+ https://drive.google.com/file/d/1REKXV-TTm1rkWEyX82Q1R6dOtE-dPsza/view?usp=sharing
+
+
+
 
 ```{r, message = FALSE, warning=FALSE, results='hide'}
 library(bindSC)
@@ -140,12 +147,15 @@ Use `paraSel_plot` function to show three integration metrics change with `alpha
 Overall, the mixing alignment metric (<0.02 difference) is robust to `alpha` and `lambda` and silhouette score is very low when `alpha=1` and `lambda=1`. 
 
 ```{r, message = FALSE, warning=FALSE, results='hide',fig.height=3, fig.width=12}
-p1 <- paraSel_plot(paraSel)
-p1
-
-tiff("paraSel.tiff", width=12, height =3, res =300, units = "in")
-print(p1)
-dev.off()
+run <- FALSE
+if(run){
+  p1 <- paraSel_plot(paraSel)
+  p1
+  
+  tiff("paraSel.tiff", width=12, height =3, res =300, units = "in")
+  print(p1)
+  dev.off()
+}
 
 ```
 
