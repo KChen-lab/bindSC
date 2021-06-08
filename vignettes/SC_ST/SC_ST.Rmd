@@ -5,11 +5,17 @@ date: "February 12, 2021"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, cache=TRUE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-This guide will demonstrate the usage of bindSC to integrate scRNA-seq and spatial transcriptomics (ST). Here we project cells from scRNA-seq onto the spatial space. The dataset is retrived from xx.
+This guide will demonstrate the usage of bindSC to integrate scRNA-seq and spatial transcriptomics (ST). Here we project cells from scRNA-seq onto the spatial space. 
+The SC data used in this evaluation can be downloaded from 
+https://drive.google.com/file/d/1o0YOZ4yNV9d26dAcNPh2pabldrwiHCBR/view?usp=sharing.
+The ST data used in this evaluation can be downloaded from 
+https://drive.google.com/file/d/1abfboNQsZEbIBmwvoVEo2ktzSv-KvrF3/view?usp=sharing.
+
+Change the input to your own file path.
 
 #### Stage 1: Load the scRNA-seq and ST data 
 
