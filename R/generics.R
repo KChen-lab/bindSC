@@ -67,7 +67,14 @@ FeatureScale <- function(X){
   }
   return(X)
 }
-
+#' Matrix Crossproduct
+#' Given a list of matrices x1, x2, ... , xn as arguments, return a matrix cross-product. 
+#' x1%*%x2%*%xn
+#' @param lst list of matrix
+#'
+#' @return returns crossproduct
+#'
+#'
 
 is.sparseMatrix <- function(x) is(x, 'sparseMatrix') 
 
@@ -159,81 +166,6 @@ PseudoProfiling <- function(x = NULL, id = NULL, bin=1000){
   res<-t(res[,-1])
 
   return(res)
-}
-
-
-Plot_river <- function(plt_dt=null){
-
-
-  library(riverplot)
-  library(reshape2)
-  library(dplyr)
-  #plt_dt<-data.frame("A"=out$meta$celltype,"B"=out$meta$tech,"C"=out$impuClst)
-  type <- as.character(unique(plt_dt$B))
-  flag<-rep("*",nrow(plt_dt))
-  flag[plt_dt$B==type[1]]<-"."
-  plt_dt$A <- paste(plt_dt$A,flag,sep="")
-  edge<-data.frame("cluster" = plt_dt$A, "imputeClst" = plt_dt$C, "value" = 1)
-  edge <- edge %>%group_by(cluster, imputeClst) %>%
-     summarise(value = sum(value), freq = n())
-
-  tp <- dcast(edge, cluster ~ imputeClst, value.var="value")
-  tp[is.na(tp)]<-0
-  rownames(tp) <- tp$cluster
-  tp<-tp[,2:dim(tp)[2]]
-  for(i in seq(1, dim(tp)[1],1)){
-    tp[i,] <- tp[i,]/sum(tp[i,])
-  }
-  edge <- data.frame(rows=rownames(tp)[row(tp)], cols=colnames(tp)[col(tp)],values=melt(tp))
-  edge <- data.frame(rows = edge$rows, cols = edge$cols, weight = edge$values.value)
-  clst1 <- unique(plt_dt$A[plt_dt$B==type[1]])
-  clst_meta <- sort(unique(plt_dt$C))
-  clst2 <- unique(plt_dt$A[plt_dt$B==type[2]])
-
-  clst1_new <- c("RBC.","BC6.","BC5A.","Rod.Cone.","MG.","BC3B.4.","BC7.","BC5B.","BC3A.1.2.",
-             "BC5C.","BC8.9.","BC5D." ,"Peri.", "HC.AC.RGC.","Mic.")
-  clst1_new <-c(clst1_new, clst1[!clst1%in%clst1_new])
-  clst2_new <- c("RBC-1*", "RBC*","RBC/BC5A cont.*", "BC6*",  "BC5A*","Cone*","Cone-2*","Cone-3*","MG*","MG-2*",
-             "BC3B*","cont.-6*","BC7*","BC5B*","cont.-5*", "BC3A*","BC2*", "BC5C*", "cont.-4*" ,
-              "RBC/BC3A cont.*",  "BC8*","BC9*",  "BC5D*","Pericyte-2*", "Pericyte*",  "AC-3*", "AC*","AC-2*",
-             "RBC/BC6 cont.*"
-             )
-  clst2_new <-c(clst2_new, clst2[!clst2%in%clst2_new])
-  clst1_new <- clst1
-  clst2_new <- clst2
-  node <- data.frame(ID=c(clst1_new, clst_meta, clst2_new),
-                      x = c(rep(1,length(clst1)), rep(4,length(clst_meta)), rep(7,length(clst2))),
-                      y = c(seq(1,length(clst1),1)*5,seq(1,length(clst_meta),1)*5,seq(1,length(clst2),1)*2.5))
-                      
-  library(RColorBrewer)
-
-  palette = c(paste0(brewer.pal(9, "Set1"), "60"),
-              paste0(brewer.pal(8, "Set2"), "60"),
-              paste0(brewer.pal(12, "Set3"), "60"),
-              paste0(brewer.pal(8, "Accent"), "60"),
-              paste0(brewer.pal(9, "Pastel1"), "60"),
-              paste0(brewer.pal(8, "Pastel2"), "60"),
-              paste0(brewer.pal(9, "Set1"), "60"),
-              paste0(brewer.pal(8, "Set2"), "60"),
-              paste0(brewer.pal(12, "Set3"), "60"),
-              paste0(brewer.pal(8, "Accent"), "60"),
-              paste0(brewer.pal(9, "Pastel1"), "60"),
-              paste0(brewer.pal(8, "Pastel2"), "60"))
-              
-              
-
-  styles = lapply(node$y, function(n) {
-    list(col = palette[n], lty = 0, textcol = "black", srt=0)
-  })
-
-  edge1 <- edge[edge$weight>0.01,]
-
-  colnames(edge1)<-c("N1","N2","Value")
-  names(styles) = node$ID                    
-  rp <- makeRiver(nodes = node, edges = edge1)
-  rp$styles <- styles
-  return(rp)
-
 }
 
 
@@ -403,8 +335,8 @@ UMAP_plot <- function(meta = NULL, color=NULL, xlim=NULL, alpha = 0.1,
     theme_classic()  +  theme(legend.position = "none") + 
     geom_text_repel(data = label_pos, repel = TRUE,
                     aes(label = label), color="black", fontface="bold",
-                    alpha = 0.75,box.padding = 0.5, point.padding = 0.1)  + 
-    theme(axis.text=element_blank(), axis.title=element_blank(),
+                    alpha = 0.75,box.padding = 0.5, point.padding = 0.1) + 
+    NoLegend() + theme(axis.text=element_blank(), axis.title=element_blank(),
                        axis.ticks=element_blank()) 
   
   
@@ -532,22 +464,6 @@ calc_silhouette_coef<-function(x = NULL, clst = NULL){
   return(out)
 }
 
-
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Functions
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#' L2 normalize the columns (or rows) of a given matrix
-#' @param mat Matrix to cosine normalize
-#' @param MARGIN Perform normalization over rows (1) or columns (2)
-#'
-#'
-#' @return returns l2-normalized matrix
-#' @import FNN cluster DescTools
-#'
-
-
 calc_alignment_score<-function(x = NULL,  clst = NULL, k = NULL){
 
   #colnames(x)[n] <- "cluster"
@@ -614,7 +530,7 @@ initial.membership = NULL, weights = NULL, node.sizes = NULL) {
     #remove zeroes from rows of matrix and return vector of length edges
   }
 
-  ##convert to pyton numpy.ndarray, then a list
+  ##convert to python numpy.ndarray, then a list
   adj_mat_py <- r_to_py(adj_mat)
   adj_mat_py <- adj_mat_py$tolist()
 

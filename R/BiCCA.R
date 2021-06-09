@@ -46,7 +46,7 @@ NULL
 #'
 #'
 #' @export
-#' @import umap irlba progress Matrix ggplot2 FNN cluster entropy DescTools 
+#' @import umap irlba progress Matrix rdist ggplot2 
 
 #'
 #' @author Jinzhuang Dou, \email{Dou1@mdanderson.org} \email{jinzhuangdou198706@gmail.com}
@@ -61,14 +61,14 @@ NULL
 #' out <- BiCCA(X=X, Z0=Z0, Y=Y, 
 #'       K = 5,
 #'       alpha = 0.5,
-#'       lambda = 0.5,
+#'       lambda = 0,
 #'       X.clst = sim$X_meta$Group,
 #'       Y.clst = sim$Y_meta$Group,  
 #'       num.iteration = 100, 
-#'       temp.path = "./out",
+#'       temp.path = "./tp",
 #'       tolerance = 0.01, 
 #'       save = TRUE, 
-#'       block.size =  0)
+#'       block.size = 500)
 
 
 
@@ -258,7 +258,7 @@ BiCCA <- function(
              message(paste(current_time, " Done! The decomposition is converged."))
         }
     }
-    #rd_cell_alignment <- calc_score(dt1 = cca_l$u, dt2 = cca_l$v, label1 = X.clst,  label2 = Y.clst)
+    rd_cell_alignment <- calc_score(dt1 = cca_l$u, dt2 = cca_l$v, label1 = X.clst,  label2 = Y.clst)
  
 
    
@@ -278,10 +278,7 @@ BiCCA <- function(
               "delta" = rd_delta,
               "score" = rd_cell_alignment )
 
-
-    if(save){
-      saveRDS(out, file=paste(temp.path,"/out_final.rds",sep=""))
-    }
+    saveRDS(out, file=paste(temp.path,"/out_final.rds",sep=""))
     return(out)
 }
 
@@ -602,7 +599,7 @@ preCheck <- function(X=NULL,
                     ncore = NCORES) {
 
     if (!is.matrix(X) && !is.sparseMatrix(X)){ff
-        stop("Please input X as a matrix!")
+        stop("Please input X as a matrix!")  
     }
     if (!is.matrix(Z0) && !is.sparseMatrix(Z0)){
         stop("Please input Z0 as a matrix!")
@@ -610,8 +607,8 @@ preCheck <- function(X=NULL,
     if (!is.matrix(Y) && !is.sparseMatrix(Y)){
         stop("Please input Y as a matrix!")
     }
-    if(block.size <=100 & block.size >0){
-        stop("Please set block.size more than 100 or set it to 0!")
+    if(block.size <=100 & block.size>0){
+        stop("Please set bloc.size more than 100 or set it to 0 (the block SVD mode is disable).")
     }
     if(length(alpha)==1){
         if(alpha < 0 || alpha >1){
