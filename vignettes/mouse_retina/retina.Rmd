@@ -6,10 +6,11 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = FALSE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 ```
 
 This guide will demonstrate the usage of bindSC to jointly define cell types by leveraging mulitple single-cell modalities. Here we define cell types that incorporate both gene expression and chromatin accessibility data. The dataset is generated from the 10x multiOme of mouse retina cell altals.
+The dataset will be provided soon. 
 
 #### Stage 1: Load the scRNA-seq and scATAC-seq data with seurat object
 
@@ -173,6 +174,7 @@ res <- BiCCA( X = t(x) ,
              parameter.optimize = FALSE,
              block.size = 0)
 
+
 ```
 
 
@@ -213,8 +215,6 @@ print(p3)
 
 
 ```
-
-
 
 #### Stage 4: Impute gene expression profiles for cells from scATAC. 
 We can also show how bindSC improves the gene score matrix after iteration process using co-assayed cells as validation. 
