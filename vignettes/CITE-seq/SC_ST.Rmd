@@ -1,0 +1,168 @@
+---
+title: "Integration of scRNA & spatial transcriptomics using bindSC"
+author: "Jinzhuang Dou @ Kenchen'lab (MDACC)"
+date: "February 12, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE, cache=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This guide will demonstrate the usage of bindSC to integrate scRNA-seq and spatial transcriptomics (ST). Here we project cells from scRNA-seq onto the spatial space. 
+The SC data used in this evaluation can be downloaded from 
+https://drive.google.com/file/d/1o0YOZ4yNV9d26dAcNPh2pabldrwiHCBR/view?usp=sharing.
+The ST data used in this evaluation can be downloaded from 
+https://drive.google.com/file/d/1abfboNQsZEbIBmwvoVEo2ktzSv-KvrF3/view?usp=sharing.
+
+Change the input to your own file path.
+
+#### Stage 1: Load the scRNA-seq and ST data 
+
+```{r, message= FALSE, warning=FALSE,results='markup'}
+library(bindSC)
+SC <- readRDS(file="./../../data/spatial_rna.rds")
+ST <- readRDS(file="./../../data/spatial_ST.rds")
+summary(SC)
+summary(ST)
+
+```
+
+We then visualize each cell, colored by cell type, from two technologies. Left is UMAP from scRNA-seq, and right is from ST data.
+For each spot in ST data, it may include more than 10 cells. Although both modalites were measured on gene expression level, there is still feature heterogenity. 
+
+```{r, message = FALSE, warning=FALSE, results='markup',fig.height=4, fig.width=8}
+tp <- data.frame("UMAP1"=SC$umap[,1], "UMAP2"=SC$umap[,2], "celltype"=SC$meta$subclass)
+
+p11 <- UMAP_plot(meta = tp, color = "celltype",  mylabel=paletteDiscrete(tp$celltype),alpha = 1,
+                 xlim=c(min(tp$UMAP1), max(tp$UMAP1)), ylim=c(min(tp$UMAP1), max(tp$UMAP2))) + ggtitle("SC")
+  
+tp <- data.frame("UMAP1"=ST$umap@cell.embeddings[,1], 
+                 "UMAP2"=ST$umap@cell.embeddings[,2], 
+                 "celltype"=ST$meta$seurat_clusters)
+
+p12 <- UMAP_plot(meta = tp, color = "celltype", mylabel=paletteDiscrete(tp$celltype),alpha = 1,
+                 xlim=c(min(tp$UMAP1), max(tp$UMAP1)), ylim=c(min(tp$UMAP2), max(tp$UMAP2))) + ggtitle("ST")
+  
+p1 <- ggarrange(p11, p12,  ncol=2, nrow=1)
+p1
+```
+
+Prepare for the input for bindSC alignment. Here we set Z0 = Y. Here we use low-dimension representations rather than the orignal matrixs for bindSC alignment. You should perform dimension reductions (SVD) on `X` and `Z0` jointly.
+```{r pressure, message = TRUE, warning=FALSE, results='markup' }
+
+x.clst <- SC$meta$subclass
+y.clst <- ST$meta$seurat_clusters
+
+out <- dimReduce( dt1 =  SC$RNA, dt2 = ST$RNA,  K = 30)
+x <- out$dt1
+z0 <- out$dt2
+y <- ST$RNA
+
+```
+
+#### Stage 3: Parameter optimization [optional]  
+
+There are two key parameters that may influence the integraton results: 1) `lambda` the modality weighting factor; 2) `alpha` the weighting factor of initilized gene score matrix. The `parameter optimization` step will run bindS alignment with `0<lambda<1` and `0<alpha<1`. This may take a long time if the sampe size is large. We found the defualt settings with lambda = 0.5 and alpha = 0.5 work well on most integration tasks. The `parameter optimization` step could be skipped if you want to use the default settings. 
+
+To run the `parameter optimization` step, you need to prepare for the cluster annotaions for each dataset. I will skip this step and use default parameters in bindSC.   
+
+
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=3, fig.width=12}
+
+run = FALSE
+if(run){
+  paraSel <- BiCCA_para_opt( X = t(x) ,
+               Y = y, 
+               Z0 =t(z0), 
+               tp="out",
+               X.clst = x.clst,
+               Y.clst = y.clst,
+               alpha.lst = seq(0,1,0.1), 
+               K.lst = c(15),
+               lambda.lst = seq(0,1,0.1),
+               num.iteration = 50,
+               tolerance = 0.01,
+               save = TRUE,
+               block.size = 1000
+  )
+  p1 <- paraSel_plot(paraSel)
+  p1
+  
+  tiff("paraSel.tiff", width=12, height =3, res =300, units = "in")
+  print(p1)
+  dev.off()
+}
+
+```
+
+
+#### Stage 4: Run bindSC  
+
+We use defualt settings with lambda = 0.5 and alpha = 0.5. The iteration process will be done in ~20s.
+
+```{r runbindsc}
+
+res <- BiCCA( X = t(x) ,
+             Y = y, 
+             Z0 = t(z0) , 
+             X.clst = x.clst,
+             Y.clst = y.clst,
+             alpha = 0.5, 
+             lambda = 0.5,
+             K = 15,
+             temp.path  = "out",
+             num.iteration = 50,
+             tolerance = 0.01,
+             save = TRUE,
+             parameter.optimize = FALSE,
+             block.size = 0)
+
+```
+
+Check the iteration process using `plotIteration` function (optional). The first row shows the objective function costs for 3 terms separately. The fourth figure shows the total objective function over iteration time. The fifth figure figure shows the relative change of gene score matrix Z over iteration time. 
+
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=8}
+
+p2 <- plotIteration(res)
+p2
+
+tiff("iteration.cost.tiff", width=12, height =6, res =300, units = "in")
+print(p2)
+dev.off()
+```
+
+#### Stage 4: Project cells from two modalites in co-embedding spaces. `res$u` and `res$r` denote the coordinates of two modalites in co-embeddings.    
+
+
+```{r, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=8}
+res <- readRDS(file="./out/out_final.rds")
+dim(res$u)
+dim(res$r)
+umap_plt <- umap(rbind(res$u, res$r))
+umap_plt  <- data.frame("UMAP1"=umap_plt$layout[,1],
+                        "UMAP2"=umap_plt$layout[,2],
+                        "celltype" = c(x.clst, y.clst),
+                        "data" = c(rep("scRNA-seq",ncol(t(x))),
+                                   rep("scATAC-seq",ncol(y))))
+  
+xlim <- c(min(umap_plt$UMAP1), max(umap_plt$UMAP1))
+ylim <- c(min(umap_plt$UMAP2), max(umap_plt$UMAP2))
+
+p11 <- UMAP_plot(meta = umap_plt[umap_plt$data=="scRNA-seq",], mylabel = paletteDiscrete(umap_plt$celltype),
+                 alpha=1,color = "celltype", xlim = xlim, ylim = ylim) + ggtitle("SC")
+p12 <- UMAP_plot(meta = umap_plt[umap_plt$data=="scATAC-seq",], mylabel=paletteDiscrete(umap_plt$celltype),
+                 alpha = 1,color = "celltype", xlim = xlim, ylim = ylim)  + ggtitle("ST")
+
+p3 <- ggarrange(p11,p12, ncol=2)
+print(p3)
+
+```
+
+
+#### Stage 5: TBD.  
+
+```{r save}
+sessionInfo()
+```
+
