@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-library("liger")
+library("rliger")
 library("irlba")
 library("Seurat")
 library("gridExtra")
@@ -10,7 +10,7 @@ library("umap")
 library("optparse")
 
 
-addnoise <- function(dt=NULL, snr=NULL){
+addw <- function(dt=NULL, snr=NULL){
   for(i in seq(1, nrow(dt),1)){
     rowSd <- sd(dt[i,])
     tp <- matrix(rnorm(length(dt[i,])), nrow=1,ncol = length(dt[i,]))*rowSd*snr
@@ -46,7 +46,7 @@ getGeneScore <- function(dt1 = NULL, dt2=NULL, c = NULL, gene_loci=NULL,win_size
   return(gene_mat)
 }
 
-sim_XYZ <- function(cell_perct=NULL, noise=NULL, nGene=500, nPeak=1500, nCell=2000){
+sim_XYZ <- function(cell_perct=NULL, w=NULL, nGene=500, nPeak=1500, nCell=2000){
   
   params<-newSplatParams()
   params<-setParam(params, "nGenes", nGene)
@@ -68,18 +68,38 @@ sim_XYZ <- function(cell_perct=NULL, noise=NULL, nGene=500, nPeak=1500, nCell=20
   
   # randomly sampling unit to generate the peak profile 
 
-  pos <- sample(nrow, nPeak-nrow, replace = TRUE)
-  peak_mat  <- addnoise(X0[pos,], snr = 0)
-  # add original gene expression matrix 
-  Y <- rbind(peak_mat, X0)
-
+  bin <- floor(nPeak/nrow)
+  pos <- sample(c(rep(c(seq(1,nrow)),bin), sample(nrow, nPeak-bin*nrow)), replace = FALSE)
+  pos <- sample(pos,replace = FALSE)
   
-  # insert the gene location in the peak matrix 
-  gene_loci <- sort(sample(nPeak-nrow, nrow, replace=TRUE))
+  peak_mat  <- addw(X0[pos,], snr = 0.15)
+  # add original gene expression matrix 
+  Y <- peak_mat
   
 
   # build gene expression matrix X by summing cis and trans peak signal
-  X <- X0
+  # identify gene loci position; randomly select nrow positions
+  gene_loci <- sample( nGene, replace=FALSE)
+  winSize <- 10
+  X <- matrix(0, nGene, ncol(Y))
+  Z0 <- matrix(0, nGene, ncol(Y))
+  for(i in seq(1,length(gene_loci))){
+    cis <- seq(max(i-winSize,1),min(i+winSize,nGene),1 )
+    trans <- which(pos==gene_loci[i])
+    cis_effect <- colSums(Y[pos[cis],])
+    trans_effect <- colSums(Y[pos[trans],])
+    X[i,] <- as.vector(cis_effect*(1-w)/length(cis)+w*trans_effect/length(trans))
+    Z0[i,] <- as.vector(cis_effect)
+  }
+  
+  
+  rownames(X) <- paste0("gene",seq(1,nrow(X),1))
+  colnames(X) <- paste0("a",seq(1,ncol(X),1))
+  rownames(Y) <- paste0("peak",seq(1,nrow(Y),1))
+  colnames(Y) <- paste0("b",seq(1,ncol(Y),1))
+  rownames(Z0) <- paste0("gene",seq(1,nrow(Z0),1))
+  colnames(Z0) <- paste0("b",seq(1,ncol(Z0),1))
+  
   dt_x <-getPCA(in1=X)
   tp <- data.frame("UMAP1"=dt_x[,1],"UMAP2"=dt_x[,2],"celltype"=x.clst)
   
@@ -95,15 +115,9 @@ sim_XYZ <- function(cell_perct=NULL, noise=NULL, nGene=500, nPeak=1500, nCell=20
   p3<-ggplot(tp, aes(x = UMAP1, y = UMAP2, color=celltype)) + 
     geom_point(alpha = 0.5, size =0.5)  
   
-  # model gene activity Z0 by adding noise 
-  Z0 <- getGeneScore(dt1 = X0,dt2 = Y , c = noise, gene_loci=gene_loci)
+  # model gene activity Z0 by adding w 
   print(cor(as.vector(X), as.vector(Z0)))
-  rownames(X) <- paste0("gene",seq(1,nrow(X),1))
-  colnames(X) <- paste0("a",seq(1,ncol(X),1))
-  rownames(Y) <- paste0("peak",seq(1,nrow(Y),1))
-  colnames(Y) <- paste0("b",seq(1,ncol(Y),1))
-  rownames(Z0) <- paste0("gene",seq(1,nrow(Z0),1))
-  colnames(Z0) <- paste0("b",seq(1,ncol(Z0),1))
+
   # check umap from gene activity Z0
   dt_x <-getPCA(in1=Z0)
   tp <- data.frame("UMAP1"=dt_x[,1],"UMAP2"=dt_x[,2],"celltype"=x.clst)
@@ -125,7 +139,7 @@ sim_XYZ <- function(cell_perct=NULL, noise=NULL, nGene=500, nPeak=1500, nCell=20
 
 option_list = list(
   make_option(c("--SNR"), type="double", default=0.1, 
-              help="noise level assigned on gene activity matrix", metavar="character"),
+              help="w level assigned on gene activity matrix", metavar="character"),
   make_option(c("--nGene"), type="integer", default=500, 
               help="number of genes", metavar="character"),
   make_option(c("--nPeak"), type="integer", default=1500, 
@@ -138,26 +152,28 @@ option_list = list(
 opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 
-
+run<-FALSE
 #prob_vec <- c(0.3,0.3,0.3,0.2,0.2,0.2,0.1,0.1,0.1,0.05,0.05,0.05) # 12 populaiton with different sample size
-prob_vec <- c(0.3,0.3,0.3)  # three populaitons with balanced sample size
-prob_vec <- prob_vec/sum(prob_vec)
 
-# The noise level is assigned on gene activity matrix and cis/trans effect matrix
-
-#noise <- 0.1
-#nGene <- 500
-#nPeak <- 1500
-#nCell <- 2000
-
-print(opt)
-noise <-opt$SNR
-popSize <- length(prob_vec)
-out_dir <- paste0("Ncell",opt$nCell,"_PopSize",opt$popSize,"_nGene",opt$nGene,"_nPeak",opt$nPeak,"_noise",noise)
-simData <- sim_XYZ(cell_perct= prob_vec, noise=noise, nGene=opt$nGene, nPeak=opt$nPeak, nCell=opt$nCell)
-#simData <- sim_XYZ(cell_perct = prob_vec, noise=noise)
-saveRDS(simData,file=paste0(opt$out,"/" , out_dir,".RDS"))
-
+if(run){
+  prob_vec <- c(0.3,0.3,0.3)  # three populaitons with balanced sample size
+  prob_vec <- prob_vec/sum(prob_vec)
+  
+  # The w level is assigned on gene activity matrix and cis/trans effect matrix
+  
+  #w <- 0.5
+  #nGene <- 500
+  #nPeak <- 1500
+  #nCell <- 2000
+  
+  print(opt)
+  w <-opt$SNR
+  popSize <- length(prob_vec)
+  out_dir <- paste0("Ncell",opt$nCell,"_PopSize",opt$popSize,"_nGene",opt$nGene,"_nPeak",opt$nPeak,"_w",w)
+  simData <- sim_XYZ(cell_perct= prob_vec, w=w, nGene=opt$nGene, nPeak=opt$nPeak, nCell=opt$nCell)
+  #simData <- sim_XYZ(cell_perct = prob_vec, w=w)
+  saveRDS(simData,file=paste0(opt$out,"/" , out_dir,".RDS"))
+}
 
 
 
