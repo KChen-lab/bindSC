@@ -1,0 +1,187 @@
+---
+title: "Comparsion of methods on multiomics integration [CITE-seq datasets]"
+author: "jinzhuang dou  @ kenchen'lab in MDACC"
+date: "March 7, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,  cache=TRUE)
+```
+
+This guide will show the perfomance of methods (bindSC, Seurat, LIGER, and Harmony) on integrating scRNA and protein data.
+Download dataset from https://drive.google.com/file/d/1CgL_WUXIU9a0IsYelk-9niky2wr5aaOT/view?usp=sharing and change the input to your own file path.
+
+#### Stage 1: load CITE-seq datasets
+
+```{r cars, message = FALSE, warning=FALSE, results='hide'}
+library(bindSC)
+source("./runMethod.R")
+source("./Eval.R")
+library(Seurat)
+library(peakRAM)
+
+bm <- readRDS(file="../../data/cite_seq.RDS")
+summary(bm)
+dim(bm$RNA)
+dim(bm$Protein)
+dim(bm$Z)
+tp <- colSums(bm$Z)
+cell_sel <- which(tp>2)
+N <- length(cell_sel)
+y <- bm$RNA[, cell_sel]
+x <- bm$Protein[, cell_sel]
+z0 <- bm$Z[,cell_sel]
+dim(x)
+dim(y)
+dim(z0)
+x.clst <- bm$meta$celltype2[cell_sel]
+y.clst <- bm$meta$celltype2[cell_sel]
+
+
+X <- x
+Z0 <-  z0
+
+celltype <- c(as.character(x.clst), as.character(y.clst))
+
+
+rd_time <- c()
+rd_mem <- c()
+
+```
+#### Stage 2: run four methods
+Run bindSC. The time used is also shown.
+```{r runbindsc,  message = FALSE, warning=FALSE, results='hide'}
+
+out <- peakRAM(
+  bindsc <- BiCCA( X = x ,
+             Y = y, 
+             Z0 =z0, 
+             X.clst = x.clst,
+             Y.clst = y.clst,
+             alpha = 0.1, 
+             lambda = 0.7,
+             K = 15,
+             temp.path  = "out",
+             num.iteration = 50,
+             tolerance = 0.01,
+             save = TRUE,
+             parameter.optimize = FALSE,
+             block.size = 0)
+
+)
+
+
+rd_mem <- c(rd_mem, out$Peak_RAM_Used_MiB)
+rd_time <- c(rd_time, out$Elapsed_Time_sec)
+
+
+bindsc_umap <- get_UMAP(rbind(bindsc$u, bindsc$r))
+```
+Run Seurat. The time used is also shown.
+```{r runSeurat,message = FALSE, warning=FALSE, results='hide'}
+memory_start <- sum(.Internal(gc(FALSE, TRUE, TRUE))[13:14]) 
+time_start <- Sys.time()
+
+
+out<-peakRAM(seurat <- runSeurat(X = X, Z0=Z0, K = 15))
+
+memory_end <- sum(.Internal(gc(FALSE, TRUE, TRUE))[13:14])  
+time_end <- Sys.time()
+memory_usage <- memory_end - memory_start
+time_usage <- time_end - time_start
+
+
+rd_mem <- c(rd_mem, out$Peak_RAM_Used_MiB)
+rd_time <- c(rd_time, out$Elapsed_Time_sec)
+
+seurat_umap <- get_UMAP(seurat)
+```
+Run LIGER. The time used is also shown.
+```{r runLIGER,message = FALSE, warning=FALSE, results='hide'}
+
+out<-peakRAM(liger <- runLIGER(X = X, Z0=Z0, K = 15))
+
+
+rd_mem <- c(rd_mem, out$Peak_RAM_Used_MiB)
+rd_time <- c(rd_time, out$Elapsed_Time_sec)
+
+liger_umap <- get_UMAP(liger)
+```
+Run Harmony. The time used is also shown.
+```{r runHarmony,message = FALSE, warning=FALSE, results='hide'}
+
+out<-peakRAM(harmony <- runHarmony(X = X, Z0=Z0, K = 15))
+
+
+
+rd_mem <- c(rd_mem, out$Peak_RAM_Used_MiB)
+rd_time <- c(rd_time, out$Elapsed_Time_sec)
+
+harmony_umap <- get_UMAP(harmony)
+```
+#### Stage 3: Visulization of integration for each method. 
+UMAP shows results from co-embeddings of each method, split by different modalites. For convenience, the cells are colored by 
+annotation from co-assyed profiles. This means that the color is consistent between two modalites
+
+```{r, plot_uma, message = FALSE, warning=FALSE, results='hide',fig.height=6, fig.width=12}
+source("./Eval.R")
+tp <- rbind(bindsc_umap, seurat_umap, liger_umap,  harmony_umap)
+merged_dt <- data.frame("UMAP1"=tp[,1], "UMAP2"=tp[,2], 
+                        "celltype"=rep(as.factor(celltype),4), 
+                        tech=rep(c(rep("A",ncol(X)), rep("B",ncol(Z0))),4),
+                        "method"=c(rep("bindSC", nrow(bindsc_umap)),  
+                                   rep("Seurat", nrow(seurat_umap)),
+                                   rep("LIGER",  nrow(liger_umap)),
+                                   rep("Harmony", nrow(harmony_umap))))
+#pos <- !((merged_dt$UMAP1>20 | merged_dt$UMAP2>20) & merged_dt$method=="bindSC")
+p <- umapPlot(merged_dt = merged_dt, tech_label = c("scRNA-seq","scATAC-seq"))
+  
+p
+
+```
+
+
+
+#### Stage 4: Visulization of integration accuracy. 
+We use three indexs: 1) silhouette score; 2) alignment mixing score; 3) anchoring distance. 
+Higher silhoouette score means cell type are well separated in the co-embedding space. 
+Higher alignment mixing score means two modalites are aligned well in the co-embedding space.
+Lower Anchoring distance means the cell with measurement from two modalites is closer in the co-embedding space.
+
+```{r, plot_alignment accuracy, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=9}
+
+coembed <- rbind(rbind(bindsc$u, bindsc$r),seurat, liger, harmony)
+out <- alignmentScore(coembed = merged_dt[,c("UMAP1","UMAP2")], merged_dt = merged_dt)
+# No meaniful results are obtained using original coembeddings. Thus we use coordinates of 2d-UMAP for evaluaiton 
+#out <- alignmentScore(coembed = coembed, merged_dt = merged_dt)
+p <- score_plot(out)
+print(p)
+
+```
+
+#### Stage 5: Running time and memory usage 
+
+```{r, plot_time/memory usage, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=4}
+# Use Gb
+
+cpu_time <- data.frame("Time"=rd_time,"Memory"=rd_mem,"Method"=c("bindSC","Seurat","LIGER","Harmony"))
+cpu_time$Memory <- cpu_time$Memory/1024
+p <- ggscatter(cpu_time,x="Time", y="Memory", color="Method",label="Method", repel = TRUE)  + 
+  theme_classic() + NoLegend() + xlim(0, max(cpu_time$Time))+ 
+  xlab("Elapsed time (Sec)") + ylab("Maximum memory usage (Gb)") + ggtitle(paste0("Cell size (", length(x.clst),",", length(y.clst),")" ))
+p
+saveRDS(cpu_time,file="./citeseq.cpu_usage.RDS")
+
+```
+
+
+#### Stage 6: Save resutls
+
+```{r save results}
+result <- list()
+result$coembed <- coembed
+result$umap <- merged_dt
+result$score <- out
+saveRDS(result, file="citeseq.methodEval.RDS")
+```

@@ -1,0 +1,230 @@
+---
+title: "Comparsion of methods on multiomics integration [mouse retina 10x multiOme data]"
+author: "jinzhuang dou  @ kenchen'lab in MDACC"
+date: "March 7, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,  cache=FALSE)
+```
+
+This guide will show the perfomance of methods (bindSC, Seurat, LIGER, and Harmony) on the simulaiton dataset
+
+#### Stage 1: load datasets
+There is ~72% cells from Rod in original dataset which will make the separation of BC cell types hard in UMAPs. Therefore, we only extract BC cells (annoated based on scRNA-seq) for method evaluation.
+
+We will release the mouse retina dataset later on. 
+
+```{r cars, message = FALSE, warning=FALSE, results='hide'}
+library(bindSC)
+source("./runMethod.R")
+source("./Eval.R")
+library(peakRAM)
+rna <- readRDS(file="./../../data/retina_10x.rna.RDS")
+atac <- readRDS(file="./../../data/retina_10x.atac.RDS")
+
+DefaultAssay(atac) <- "ACTIVITY"
+
+
+atac <- FindVariableFeatures(atac, nfeatures = 10000)
+gene.use <- intersect(VariableFeatures(rna), VariableFeatures(atac))
+sample_sel <- seq(1,9383,1)
+tp <- rna@meta.data$celltype
+sample_sel <- sample_sel[grepl("BC",tp)]
+out_dim <- dimReduce( dt1 =  rna[["RNA"]][gene.use, sample_sel], dt2 = atac[["ACTIVITY"]][gene.use,sample_sel], K = 30)
+x <- out_dim$dt1
+z0 <- out_dim$dt2
+y  <- atac@reductions$lsi@cell.embeddings[sample_sel,]
+
+x.clst <- rna@meta.data$celltype[sample_sel]
+y.clst <- x.clst
+X <- rna[["RNA"]][gene.use,sample_sel]
+Z0 <-  atac[["ACTIVITY"]][gene.use,sample_sel]
+
+celltype <- c(x.clst, y.clst)
+
+
+rd_time <- c()
+rd_mem <- c()
+
+
+```
+#### Stage 2: run four methods
+Run bindSC. The time used is also shown.
+```{r runbindsc,  message = FALSE, warning=FALSE, results='hide'}
+source("./runMethod.R")
+
+out <- peakRAM(
+  bindsc <- BiCCA( X = t(x) ,
+             Y = t(y), 
+             Z0 =t(z0), 
+             X.clst = x.clst,
+             Y.clst = y.clst,
+             alpha = 0.5, 
+             lambda = 0.5,
+             K = 15,
+             temp.path  = "out",
+             num.iteration = 50,
+             tolerance = 0.01,
+             save = TRUE,
+             parameter.optimize = FALSE,
+             block.size =0)
+)
+
+rd_mem <- c(rd_mem, out$Peak_RAM_Used_MiB)
+rd_time <- c(rd_time, out$Elapsed_Time_sec)
+
+bindsc_umap <- get_UMAP(rbind(bindsc$u, bindsc$r))
+```
+Run Seurat. The time used is also shown.
+```{r runSeurat,message = FALSE, warning=FALSE, results='hide'}
+
+out <-peakRAM(seurat <- runSeurat(X = X, Z0=Z0, K = 15))
+
+rd_mem <- c(rd_mem, out$Peak_RAM_Used_MiB)
+rd_time <- c(rd_time, out$Elapsed_Time_sec)
+
+seurat_umap <- get_UMAP(seurat)
+```
+Run LIGER. The time used is also shown.
+```{r runLIGER,message = FALSE, warning=FALSE, results='hide'}
+
+out <- peakRAM(liger <- runLIGER(X = X, Z0=Z0, K = 15))
+
+rd_mem <- c(rd_mem, out$Peak_RAM_Used_MiB)
+rd_time <- c(rd_time, out$Elapsed_Time_sec)
+liger_umap <- get_UMAP(liger)
+```
+Run Harmony. The time used is also shown.
+```{r runHarmony,message = FALSE, warning=FALSE, results='hide'}
+runHarmony <- function(X=NULLL,Z0 = NULL, K =NULL){
+  
+  memory_start <- sum(.Internal(gc(FALSE, TRUE, TRUE))[13:14]) 
+  time_start <- Sys.time()
+  
+  gene.use <- rownames(X)
+  Z0 <- (Z0 - rowMeans(Z0))
+  X <- (X - rowMeans(X))
+  dt2<-CreateSeuratObject(counts=(Z0-min(Z0)))
+  dt1<-CreateSeuratObject(counts=(X-min(X)))
+  merged <- merge(x = dt1, y = dt2, add.cell.ids= c("dt1", "dt2"), project = "eval")
+  
+  merged@meta.data$type <- c(rep("X",dim(X)[2]), rep("Y",dim(Z0)[2]))
+  
+  merged <- NormalizeData(merged) %>%  ScaleData() 
+  
+  merged <-RunPCA(merged, verbose = FALSE, features = rownames(merged))
+  
+  merged <- RunHarmony(merged, group.by.vars = "type")
+
+  res<- merged@reductions$harmony@cell.embeddings[,seq(1,K,1)]
+  
+  
+  #memory_usage <- sum(.Internal(gc(FALSE, FALSE, TRUE))[13:14]) - tt
+  time_end <- Sys.time()
+  time_usage <-(time_end - time_start)
+  #print(c(time_usage, memory_usage))
+  
+  return(res)
+  
+}
+
+out <-peakRAM(harmony <- runHarmony(X = X, Z0=Z0, K = 15))
+
+rd_mem <- c(rd_mem, out$Peak_RAM_Used_MiB)
+rd_time <- c(rd_time, out$Elapsed_Time_sec)
+
+harmony_umap <- get_UMAP(harmony)
+```
+#### Stage 3: Visulization of integration for each method. 
+UMAP shows results from co-embeddings of each method, split by different modalites. For convenience, the cells are colored by 
+annotation from co-assyed profiles. This means that the color is consistent between two modalites
+
+```{r, plot_uma, message = FALSE, warning=FALSE, results='hide',fig.height=6, fig.width=12}
+source("./Eval.R")
+
+
+bindsc_umap <- get_UMAP(rbind(bindsc$u, bindsc$r))
+tp <- rbind(bindsc_umap, seurat_umap, liger_umap,  harmony_umap)
+merged_dt <- data.frame("UMAP1"=tp[,1], "UMAP2"=tp[,2], 
+                        "celltype"=rep(as.factor(celltype),4), 
+                        tech=rep(c(rep("A",ncol(X)), rep("B",ncol(Z0))),4),
+                        "method"=c(rep("bindSC", nrow(bindsc_umap)),  
+                                   rep("Seurat", nrow(seurat_umap)),
+                                   rep("LIGER",  nrow(liger_umap)),
+                                   rep("Harmony", nrow(harmony_umap))))
+# remove one outlier from Seurat
+pos<-which(merged_dt$method=="Seurat" & merged_dt$UMAP1<(-90),arr.ind = TRUE)
+merged_dt1 <- merged_dt[-c(pos),]
+
+p <- umapPlot(merged_dt = merged_dt, tech_label = c("scRNA-seq","scATAC-seq"))
+  
+p
+
+tiff("mouse_retina.tiff", width=12, height =6, res =300, units = "in", compression = "lzw")
+print(p)
+dev.off()
+
+```
+
+
+#### Stage 4: Running time and memory usage 
+```{r, plot running time/cpu usages, message = FALSE, warning=FALSE, results='hide',fig.height=4, fig.width=4}
+# Use Gb
+
+cpu_time <- data.frame("Time"=rd_time,"Memory"=rd_mem,"Method"=c("bindSC","Seurat","LIGER","Harmony"))
+cpu_time$Memory <- cpu_time$Memory/1024
+p <- ggscatter(cpu_time,x="Time", y="Memory", color="Method",label="Method", repel = TRUE)  + 
+  theme_classic() + NoLegend() + xlim(0, max(cpu_time$Time))+ 
+  xlab("Elapsed time (Sec)") + ylab("Maximum memory usage (Gb)") + ggtitle(paste0("Cell size (", length(x.clst),",", length(y.clst),")" ))
+p
+saveRDS(cpu_time,file="./retina.cpu_usage.RDS")
+
+```
+
+
+
+### Stage 5: Label transfer accuracy 
+
+```{r label transfer accuracy}
+library(e1071)
+library(corrplot)
+coembed <- rbind(rbind(bindsc$u, bindsc$r), seurat, liger, harmony)
+method_lst <- c("bindSC","Seurat","LIGER","Harmony")
+rd <-c()
+concordance <- list()
+
+# plot bindSC only 
+rd<-c()
+
+for(i in c("bindSC","Seurat","LIGER","Harmony")){
+  print(i)
+  unit <- unique(as.character(merged_dt$celltype))
+  x_pos <- which(merged_dt$method==i & merged_dt$tech=="A",arr.ind = TRUE)
+  y_pos <- which(merged_dt$method==i & merged_dt$tech=="B",arr.ind = TRUE)
+  cell_type_predict<-label_transfer(dt1 =coembed[x_pos,],
+                 X.clst = merged_dt$celltype[x_pos],
+                 dt2 = coembed[y_pos,])
+  cell_type_true <- merged_dt$celltype[y_pos]
+  lst <- data.frame("TRUE"=c(as.character(cell_type_true),unit),"Predict"=c(as.character(cell_type_predict$celltype),unit))
+  
+  confus_mat <- as.matrix(table(lst))
+  for(ii in seq(1,nrow(confus_mat),1)){
+     confus_mat[ii,]<- confus_mat[ii,]/sum(confus_mat[ii,])
+  }
+  ratio_all <- sum(diag(confus_mat))/sum(confus_mat)
+  
+
+  rd <- rbind(rd, c(ratio_all))
+  if(i=="bindSC"){concordance$bindSC <- confus_mat}
+  if(i=="Seurat"){concordance$Seurat <- confus_mat}
+  if(i=="LIGER"){concordance$LIGER <- confus_mat}
+  if(i=="Harmony"){concordance$Harmony <- confus_mat}
+
+  corrplot(confus_mat,is.corr = FALSE,cl.lim = c(0,1))
+
+}
+print(rd)
+
+```
