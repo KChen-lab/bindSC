@@ -20,12 +20,12 @@ library(ggpubr)
 source("./sim.R")
 
 prob_vec <- c(0.3,0.3,0.4)  # three populaitons 
-noise <- 0.5
+w <- 0.5   # contribution of distal peaks on gene regulation 
 nGene <- 500
 nPeak <- 1500
 nCell <- 2000
 
-sim<- sim_XYZ(cell_perct= prob_vec, noise=noise, nGene=nGene, nPeak=nPeak, nCell=nCell)
+sim<- sim_XYZ(cell_perct= prob_vec, w=w, nGene=nGene, nPeak=nPeak, nCell=nCell)
 
 
 
