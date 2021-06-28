@@ -160,7 +160,24 @@ print(p3)
 ```
 
 
-#### Stage 5: TBD.  
+#### Stage 5: Label transfer from scRNA-seq data to ST data.  
+
+```{r label transfer}
+library(e1071)
+library(corrplot)
+cell_type_predict <- label_transfer(dt1=res$u, X.clst=x.clst, dt2=res$r)
+head(cell_type_predict)
+cell_type_predict$cluster<-as.character(y.clst)
+
+confus_mat <- as.matrix(table(cell_type_predict[,c("cluster","celltype")]))
+for(i in seq(1, nrow(confus_mat),1)){
+  confus_mat[i,] <- confus_mat[i,]/sum(confus_mat[i,])
+}
+
+corrplot(as.matrix(confus_mat),is.corr = FALSE)
+
+```
+
 
 ```{r save}
 sessionInfo()
