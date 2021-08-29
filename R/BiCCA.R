@@ -556,7 +556,7 @@ label_transfer <- function(dt1 = NULL, X.clst = NULL, dt2 = NULL){
     for(i in seq(1, nrow(dis),1)){
           b<-sort(dis[i,])
           d<-rep(0, length(b))
-          d[which(b[i,]<=b[k])]<-1
+          d[which(dis[i,]<=b[k])]<-1
           dis[i,]<-d/k
     }
     U <- dis%*%dt1
