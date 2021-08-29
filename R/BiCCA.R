@@ -549,8 +549,21 @@ RunModularityClusteringCpp <- function(SNN, modularityFunction, resolution, algo
 
 
 label_transfer <- function(dt1 = NULL, X.clst = NULL, dt2 = NULL){
+    
+    dis<-cdist(as.matrix(dt2), as.matrix(dt1))
+   # using k-neighbour to update coembeddings 
+    k <- 3
+    for(i in seq(1, nrow(dis),1)){
+          b<-sort(dis[i,])
+          d<-rep(0, length(b))
+          d[which(b[i,]<=b[k])]<-1
+          dis[i,]<-d/k
+    }
+    U <- dis%*%dt1
+        
+
     model <- svm(dt1, as.factor(X.clst), probability=TRUE)
-    pred <- predict(model, dt2, probability=TRUE)
+    pred <- predict(model, U, probability=TRUE)
     out <- attr(pred, "probabilities")
    
     celltype <- rep("unknown", nrow(out))
