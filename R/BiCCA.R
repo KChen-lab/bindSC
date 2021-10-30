@@ -86,6 +86,7 @@ BiCCA <- function(
     num.iteration = 100, 
     tolerance = 0.01,  
     save = FALSE, 
+    calc.score=FALSE,
     block.size = 0){
 
     start_time <- Sys.time()
@@ -152,8 +153,7 @@ BiCCA <- function(
     rd_cost_all <- c()
     rd_cell_alignment <- list()
     rd_cell_alignment_mean <- c()
-
-
+    
     if(parameter.optimize==FALSE){
         pb <- progress_bar$new(
               format = "  Iterating [:bar] :percent eta: :eta",
@@ -230,6 +230,7 @@ BiCCA <- function(
               "r" = cca_l$v,
               "s" = cca_r$u,
               "v" = cca_r$v,  
+  	      "d" = cca_l$d,
               "Z_est" = Z0,   
               "cost_l" =  cost_l,
               "cost_r" =  cost_r,
@@ -258,8 +259,13 @@ BiCCA <- function(
              message(paste(current_time, " Done! The decomposition is converged."))
         }
     }
-    rd_cell_alignment <- calc_score(dt1 = cca_l$u, dt2 = cca_l$v, label1 = X.clst,  label2 = Y.clst)
- 
+    if(calc.score){
+    
+     rd_cell_alignment <- calc_score(dt1 = cca_l$u, dt2 = cca_l$v, label1 = X.clst,  label2 = Y.clst)
+    }
+    else{
+      rd_cell_alignment <- NULL
+    }
 
    
     if(!is.na(colnames(X)[1])) {rownames(cca_l$u) <- colnames(X)}
@@ -268,6 +274,7 @@ BiCCA <- function(
     out<-list(
               "u" = cca_l$u, 
               "r" = cca_l$v,
+	      "d" = cca_l$d,
               "s" = cca_r$u,
               "v" = cca_r$v,
               "Z_est" = Z0,   
@@ -351,6 +358,7 @@ BiCCA_para_opt <-function(X=NULL,
     lambda.lst = NULL,
     ncore = NCORES,
     block.size = NULL,
+    calc.score = FALSE,
     K.lst = NULL){
 
     start_time <- Sys.time()
@@ -457,7 +465,7 @@ BiCCA_para_opt <-function(X=NULL,
 # X is our data variable
 # svd(t(X)%*%Y)
 
- irlba_block <- function(x=NULL, y=NULL, blocksize=NULL, k = k){
+ irlba_block <- function(x=NULL, y=NULL, blocksize=NULL, k = NULL){
 
     #x <- as.matrix(t(x))
     blocksize <- min(c(blocksize, ncol(x)))
@@ -474,7 +482,7 @@ BiCCA_para_opt <-function(X=NULL,
 
     #loop through the data
     block_cnt <- 0
-    T <- 25
+    T <- k
     #T <- nrow(x)
     while ( i <= m ){
       block_cnt <- block_cnt + 1
@@ -526,7 +534,7 @@ BiCCA_para_opt <-function(X=NULL,
       X1$u <- rbind(X1$u, tp)
     }
 
-    #X1$u <- U1 %*% y.svd$u
+    #X1$u <- U1 %*% y.svd$
     X1$u <- X1$u[,seq(1,k,1)]
     X1$v <- y.svd$v[,seq(1,k,1)]
     #X1$d <- diag(y.svd$d, nrow = length(y.svd$d))
@@ -548,11 +556,13 @@ RunModularityClusteringCpp <- function(SNN, modularityFunction, resolution, algo
 }
 
 
-label_transfer <- function(dt1 = NULL, X.clst = NULL, dt2 = NULL){
+
+
+label_transfer <- function(dt1 = NULL, X.clst = NULL, dt2 = NULL, k=3){
     
     dis<-cdist(as.matrix(dt2), as.matrix(dt1))
-   # using k-neighbour to update coembeddings 
-    k <- 3
+    # using k-neighbour to update coembeddings 
+    #k <- 3
     for(i in seq(1, nrow(dis),1)){
           b<-sort(dis[i,])
           d<-rep(0, length(b))
@@ -594,6 +604,27 @@ calc_score <- function(dt1 = NULL, dt2 = NULL, label1 = NULL, label2 = NULL ){
     out$alignment <- calc_alignment_score(x = dt3, k = 20, clst = label3)
     return(out)
 }
+
+# dt1 bindSC co-embedding: on RNA cells 
+# dt2 bindSC co-embedding: on Merfish cells 
+# X : gene expression matrix on RNA cells 
+# k:  neighbor size
+GeneImp <- function(dt1 = NULL, X = NULL, dt2 = NULL, k=NULL){
+    
+    dis<-cdist(as.matrix(dt2), as.matrix(dt1))
+   # using k-neighbour to update coembeddings 
+  
+    for(i in seq(1, nrow(dis),1)){
+          b<-sort(dis[i,])
+          d<-rep(0, length(b))
+          d[which(b[i,]<=b[k])]<-1
+          dis[i,]<-d/k
+    }
+    U <- dis%*%X
+    return(U)
+        
+}
+
 
 
 preCheck <- function(X=NULL, 

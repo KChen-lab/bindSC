@@ -169,6 +169,81 @@ PseudoProfiling <- function(x = NULL, id = NULL, bin=1000){
 }
 
 
+Plot_river <- function(plt_dt=null){
+
+
+  library(riverplot)
+  library(reshape2)
+  library(dplyr)
+  #plt_dt<-data.frame("A"=out$meta$celltype,"B"=out$meta$tech,"C"=out$impuClst)
+  type <- as.character(unique(plt_dt$B))
+  flag<-rep("*",nrow(plt_dt))
+  flag[plt_dt$B==type[1]]<-"."
+  plt_dt$A <- paste(plt_dt$A,flag,sep="")
+  edge<-data.frame("cluster" = plt_dt$A, "imputeClst" = plt_dt$C, "value" = 1)
+  edge <- edge %>%group_by(cluster, imputeClst) %>%
+     summarise(value = sum(value), freq = n())
+
+  tp <- dcast(edge, cluster ~ imputeClst, value.var="value")
+  tp[is.na(tp)]<-0
+  rownames(tp) <- tp$cluster
+  tp<-tp[,2:dim(tp)[2]]
+  for(i in seq(1, dim(tp)[1],1)){
+    tp[i,] <- tp[i,]/sum(tp[i,])
+  }
+  edge <- data.frame(rows=rownames(tp)[row(tp)], cols=colnames(tp)[col(tp)],values=melt(tp))
+  edge <- data.frame(rows = edge$rows, cols = edge$cols, weight = edge$values.value)
+  clst1 <- unique(plt_dt$A[plt_dt$B==type[1]])
+  clst_meta <- sort(unique(plt_dt$C))
+  clst2 <- unique(plt_dt$A[plt_dt$B==type[2]])
+
+  clst1_new <- c("RBC.","BC6.","BC5A.","Rod.Cone.","MG.","BC3B.4.","BC7.","BC5B.","BC3A.1.2.",
+             "BC5C.","BC8.9.","BC5D." ,"Peri.", "HC.AC.RGC.","Mic.")
+  clst1_new <-c(clst1_new, clst1[!clst1%in%clst1_new])
+  clst2_new <- c("RBC-1*", "RBC*","RBC/BC5A cont.*", "BC6*",  "BC5A*","Cone*","Cone-2*","Cone-3*","MG*","MG-2*",
+             "BC3B*","cont.-6*","BC7*","BC5B*","cont.-5*", "BC3A*","BC2*", "BC5C*", "cont.-4*" ,
+              "RBC/BC3A cont.*",  "BC8*","BC9*",  "BC5D*","Pericyte-2*", "Pericyte*",  "AC-3*", "AC*","AC-2*",
+             "RBC/BC6 cont.*"
+             )
+  clst2_new <-c(clst2_new, clst2[!clst2%in%clst2_new])
+  clst1_new <- clst1
+  clst2_new <- clst2
+  node <- data.frame(ID=c(clst1_new, clst_meta, clst2_new),
+                      x = c(rep(1,length(clst1)), rep(4,length(clst_meta)), rep(7,length(clst2))),
+                      y = c(seq(1,length(clst1),1)*5,seq(1,length(clst_meta),1)*5,seq(1,length(clst2),1)*2.5))
+                      
+  library(RColorBrewer)
+
+  palette = c(paste0(brewer.pal(9, "Set1"), "60"),
+              paste0(brewer.pal(8, "Set2"), "60"),
+              paste0(brewer.pal(12, "Set3"), "60"),
+              paste0(brewer.pal(8, "Accent"), "60"),
+              paste0(brewer.pal(9, "Pastel1"), "60"),
+              paste0(brewer.pal(8, "Pastel2"), "60"),
+              paste0(brewer.pal(9, "Set1"), "60"),
+              paste0(brewer.pal(8, "Set2"), "60"),
+              paste0(brewer.pal(12, "Set3"), "60"),
+              paste0(brewer.pal(8, "Accent"), "60"),
+              paste0(brewer.pal(9, "Pastel1"), "60"),
+              paste0(brewer.pal(8, "Pastel2"), "60"))
+              
+              
+
+  styles = lapply(node$y, function(n) {
+    list(col = palette[n], lty = 0, textcol = "black", srt=0)
+  })
+
+  edge1 <- edge[edge$weight>0.01,]
+
+  colnames(edge1)<-c("N1","N2","Value")
+  names(styles) = node$ID                    
+  rp <- makeRiver(nodes = node, edges = edge1)
+  rp$styles <- styles
+  return(rp)
+
+}
+
+
 
 PseudoCell <- function( x = NULL, resolution1 = NULL, resolution2 =NULL){
   coembedding <- L2Norm(as.matrix(rbind(x$u, x$r)))
