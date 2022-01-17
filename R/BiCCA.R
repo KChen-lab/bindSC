@@ -125,6 +125,9 @@ BiCCA <- function(
                                     " Y[",Y_Nloci,"x",Y_Ncell,"]",
                                     " Z0[",Z_Ngene,"x",Z_Ncell,"]", sep=""))
     }
+    if(parameter.optimize==TRUE){
+	   calc.score <- TRUE
+    }
 
 
     gc()
