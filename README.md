@@ -94,6 +94,6 @@ We also provided comparison of bindSC with available tools including Seurat, LIG
 This project is covered under the **GNU General Public License 3.0**.
 
 ## Citation
-Dou J, Liang S, Mohanty V, Miao Q, Huang Y, Liang Q, Cheng X, Kim S, Choi J, Li Y, Li L. [Bi-order multimodal integration of single-cell data. Genome biology. 2022 Dec;23(1):1-25]. (https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02679-x)
+Dou J, Liang S, Mohanty V, Miao Q, Huang Y, Liang Q, Cheng X, Kim S, Choi J, Li Y, Li L. [Bi-order multimodal integration of single-cell data. Genome biology. 2022 Dec;23(1):1-25](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02679-x)
   
 
