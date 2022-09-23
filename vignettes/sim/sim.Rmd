@@ -11,32 +11,19 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This guide will demonstrate the usage of bindSC to intergrate RNA and ATAC under the gene regulation modeling with  expression level regulated by both proximal and distal peaks. 
    
-### Stage 1: Generate simulation  data
+### Stage 1: load simulation  data
 User can refer to `sim.R` for the details of simulaiton process (It will take 5 mins). 
 
 ```{r load data,echo=TRUE, warning=FALSE, message=FALSE}
 library(bindSC)
-library(ggpubr)
-source("./sim.R")
-
-prob_vec <- c(0.3,0.3,0.4)  # three populaitons 
-w <- 0.5   # contribution of distal peaks on gene regulation 
-nGene <- 500
-nPeak <- 1500
-nCell <- 2000
-
-sim<- sim_XYZ(cell_perct= prob_vec, w=w, nGene=nGene, nPeak=nPeak, nCell=nCell)
-
-
-
 dim(sim$X)
 dim(sim$Y)
 dim(sim$Z0)
 ```
 
-Usage of BiCCA 
+# Usage of BiCCA 
 
-```{r usage, warning=TRUE, message=TRUE}
+```{r usage, warning=FALSE, message=TRUE}
 
 ?BiCCA
 
@@ -48,13 +35,15 @@ bindSC also requires the modality specfic clustering ID `X.clst`,`Y.clst` to tes
  
 The option `tolereance` is usually set from 0.01 to 0.05 to avoid unnecessary iteration when sample size is large.
 
+This step will take ~10s 
+
 ```{r run BiCCA}
 out <- BiCCA(X=sim$X, Z0=sim$Z0, Y=sim$Y, 
       K = 5,
       alpha = 0.1,
       lambda = 0.5,
-      X.clst = sim$x.clst,
-      Y.clst = sim$y.clst,  
+      X.clst = sim$X_meta$Group,
+      Y.clst = sim$Y_meta$Group,  
       num.iteration = 100, 
       temp.path = "./out",
       tolerance = 0.01, 
@@ -75,11 +64,18 @@ There are three key ouputs.The vectors `u` and `v` are the low-dimension reprent
 ```{r output check}
 summary(out)
 ```
+```{r output check u}
+dim(out$u)
+dim(out$r)
+dim(out$Z_est)
+```
 
-### Stage 2: Comparsion between bindSC and the traditonal CCA
+### Stage 2: Comparsion between bindSC and the traditional CCA
+
+# Coembedings from bindSC results 
 
 ```{r method comparison, echo=TRUE, warning=FALSE, fig.height=5, fig.width=6}
-cell_type <- c(sim$x.clst, sim$y.clst)
+cell_type <- c(sim$X_meta$Group, sim$Y_meta$Group)
 data_type <- c(rep("A", dim(out$u)[1]), rep("B",dim(out$r)[1]))
 
 bindsc_umap <- umap(rbind(out$u, out$r))
@@ -96,7 +92,7 @@ p
 
 ```
 
-Performance on traditional CCA method (results are from the first iteration). 
+# Performance on traditional CCA method (results are from the first iteration). 
 
 ```{r method comparison cca, echo=TRUE, warning=FALSE, fig.height=5, fig.width=6}
 out <- readRDS(file="./out/iteration1.rds")
