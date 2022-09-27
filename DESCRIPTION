@@ -13,7 +13,7 @@ License: GPL-3 | file LICENSE
 Encoding: UTF-8
 LazyData: true
 Depends: R (>= 3.6),umap (>= 0.2.4.0), irlba (>= 2.3.3), progress (>= 1.2.2),
-        Matrix, ggplot2 (>= 3.2.1), Seurat, dplyr, DescTools, ggpubr,ggplot2,
+        Matrix, ggplot2 (>= 3.2.1), Seurat (==3.1.1), dplyr, DescTools, ggpubr,ggplot2,
         ComplexHeatmap, reshape2, ggrepel, cluster,FNN, reticulate, rdist,
 Imports: umap (>= 0.2.4.0), irlba (>= 2.3.3), progress (>= 1.2.2),
         Matrix, ggplot2 (>= 3.2.1), Seurat, dplyr, DescTools, ggplot2,
