@@ -62,7 +62,7 @@ $ R
 
 Users can also install `bindSC` from source code: 
 ``` bash 
-You need to install dependencies listed in `DESCRIPTIOn`. 
+You need to install dependencies listed in `DESCRIPTION`. 
 Note You had better to install Seurat V3. There is large change on Seurat V4 and there may lead to errors on installation. 
 umap (>= 0.2.4.0),
 irlba (>= 2.3.3),
