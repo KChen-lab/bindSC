@@ -62,9 +62,16 @@ $ R
 
 Users can also install `bindSC` from source code: 
 ``` bash 
-You need to install dependencies listed in `DESCRIPTION`. 
+You need to install dependencies listed in `DESCRIPTION` as follow
 $ R
-> install.packages(c("umap", "irlba","progress","Matrix","ggplot2","dplyr","DescTools","ggpubr","reshape2","ggrepel","rdist"))
+listOfPackages <-c("umap", "irlba","progress","Matrix","ggplot2","dplyr","DescTools","ggpubr","reshape2","ggrepel","rdist")
+for (i in listOfPackages){
+     if(! i %in% installed.packages()){
+         install.packages(i, dependencies = TRUE)
+     }
+}
+
+
 $ git clone https://github.com/KChen-lab/bindSC.git
 $ R CMD INSTALL bindSC
 ```
