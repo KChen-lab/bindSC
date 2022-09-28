@@ -198,19 +198,19 @@ plotIteration <- function(x = NULL){
                 "delta" = x$delta
                 )
 
-    p1 <- ggplot(dt, aes(x = iter, y = cost_left, color = "#00AFBB")) + 
+    p1 <- ggplot(dt, aes(x = iter, y = cost_left, color = "#00AFBB")) + geom_point() + 
         xlab("Iteration time") + ylab("obj. on left CCA") + theme_classic()
 
-    p2 <- ggplot(dt, aes(x = iter, y = cost_right, color = "#00AFBB")) + 
+    p2 <- ggplot(dt, aes(x = iter, y = cost_right, color = "#00AFBB")) + geom_point() + 
         xlab("Iteration time") + ylab("obj. on right CCA") + theme_classic()
 
-    p3 <- ggplot(dt, aes(x = iter, y = cost_z0, color = "#00AFBB")) + 
+    p3 <- ggplot(dt, aes(x = iter, y = cost_z0, color = "#00AFBB")) + geom_point() + 
         xlab("Iteration time") + ylab("obj. on ||Z-Z0||") + theme_classic()
 
-    p4 <- ggplot(dt, aes(x = iter, y = cost_right, color = "#00AFBB")) + 
+    p4 <- ggplot(dt, aes(x = iter, y = cost_right, color = "#00AFBB")) + geom_point() + 
         xlab("Iteration time") + ylab("obj. on all three terms") + theme_classic()
 
-    p5 <- ggplot(dt, aes(x = iter, y = delta, color = "#00AFBB")) + 
+    p5 <- ggplot(dt, aes(x = iter, y = delta, color = "#00AFBB")) + geom_point() + 
         xlab("Iteration time") + ylab("Relative change of Z") + theme_classic()
 
 
