@@ -20,6 +20,9 @@ Improvements and new features will be added on a regular basis, please contact j
 
 ## Version History 
 
+###v1.0.0  [28/09/2022]
+* remove unncessary functions/packages for plotting
+
 ### v1.0.0 [01/03/2021]
 
 * Add the modality specfic weighting factor on the objective fucntion 
