@@ -464,7 +464,7 @@ BiCCA_para_opt <-function(X=NULL,
 
 
 
-#R code for split-and-merge approach for Single Value Decomposition(SVD)
+# R code for split-and-merge approach for Single Value Decomposition(SVD)
 # X is our data variable
 # svd(t(X)%*%Y)
 
@@ -552,13 +552,6 @@ BiCCA_para_opt <-function(X=NULL,
 
 
 
-RunModularityClusteringCpp <- function(SNN, modularityFunction, resolution, algorithm, nRandomStarts, nIterations, randomSeed, printOutput, edgefilename) {
-    .Call('_Seurat_RunModularityClusteringCpp', PACKAGE = 'Seurat',
-     SNN, modularityFunction, resolution, algorithm, nRandomStarts, 
-     nIterations, randomSeed, printOutput, edgefilename)
-}
-
-
 
 
 label_transfer <- function(dt1 = NULL, X.clst = NULL, dt2 = NULL, k=3){
@@ -607,6 +600,7 @@ calc_score <- function(dt1 = NULL, dt2 = NULL, label1 = NULL, label2 = NULL ){
     out$alignment <- calc_alignment_score(x = dt3, k = 20, clst = label3)
     return(out)
 }
+
 
 # dt1 bindSC co-embedding: on RNA cells 
 # dt2 bindSC co-embedding: on Merfish cells 
