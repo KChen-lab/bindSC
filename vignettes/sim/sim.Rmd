@@ -24,9 +24,7 @@ dim(sim$Z0)
 # Usage of BiCCA 
 
 ```{r usage, warning=FALSE, message=TRUE}
-
 ?BiCCA
-
 ```
 
 In this example, dataset `X` is the gene expression matrix and `Y` is the peak matrix.  `Z0` is the simulated gene activity matrix.  Seurat, Liger and Harmony use (`X`, `Z0`) as input and BiCCA uses (`X`, `Z0`, `Y`) as input. 
@@ -49,7 +47,6 @@ out <- BiCCA(X=sim$X, Z0=sim$Z0, Y=sim$Y,
       tolerance = 0.01, 
       save = TRUE, 
       block.size =10000)
-
 ```
 
 Show the iteration index `delta` 
@@ -77,19 +74,15 @@ dim(out$Z_est)
 ```{r method comparison, echo=TRUE, warning=FALSE, fig.height=5, fig.width=6}
 cell_type <- c(sim$X_meta$Group, sim$Y_meta$Group)
 data_type <- c(rep("A", dim(out$u)[1]), rep("B",dim(out$r)[1]))
-
 bindsc_umap <- umap(rbind(out$u, out$r))
-
 plt_dt <- data.frame("UMAP1"=bindsc_umap$layout[,1],
                      "UMAP2"=bindsc_umap$layout[,2],
                      "cell_type"= as.factor(cell_type),
                      "data_type"=data_type)
-
 p<-ggscatter(plt_dt, x = "UMAP1", y = "UMAP2",
      color = "cell_type", palette = c("darkseagreen4","lightpink","darkorchid1"), 
      repel = FALSE,size=1, alpha=1,legend.title = "", title="bindSC", font.title=16) + facet_grid(~data_type) 
 p
-
 ```
 
 # Performance on traditional CCA method (results are from the first iteration). 
@@ -97,7 +90,6 @@ p
 ```{r method comparison cca, echo=TRUE, warning=FALSE, fig.height=5, fig.width=6}
 out <- readRDS(file="./out/iteration1.rds")
 cca_umap <- umap(rbind(out$u, out$r))
-
 plt_dt <- data.frame("UMAP1"=cca_umap$layout[,1],
                      "UMAP2"=cca_umap$layout[,2],
                      "cell_type"= as.factor(cell_type),
@@ -107,7 +99,6 @@ p<-ggscatter(plt_dt[(plt_dt$UMAP1>(-20) & plt_dt$UMAP2<20), ], x = "UMAP1", y = 
      color = "cell_type", palette = c("darkseagreen4","lightpink","darkorchid1"), 
      repel = FALSE,size=1, alpha=1,legend.title = "", title="CCA", font.title=16) + facet_grid(~data_type)
 p
-
 ```
 ```{r summary}
 sessionInfo()
