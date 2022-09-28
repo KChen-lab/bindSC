@@ -67,7 +67,7 @@ Users can also install `bindSC` from source code:
 ``` bash 
 You need to install dependencies listed in `DESCRIPTION` as follow
 $ R
-listOfPackages <-c("umap", "irlba","progress","Matrix","ggplot2","dplyr","DescTools","ggpubr","reshape2","ggrepel","rdist")
+listOfPackages <-c("umap", "irlba","progress","Matrix","ggplot2","dplyr","DescTools","ggpubr","reshape2","ggrepel","rdist","gtools")
 for (i in listOfPackages){
      if(! i %in% installed.packages()){
          install.packages(i, dependencies = TRUE)
