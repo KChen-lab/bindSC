@@ -13,10 +13,10 @@ License: GPL-3 | file LICENSE
 Encoding: UTF-8
 LazyData: true
 Depends: R (>= 3.6),umap (>= 0.2.4.0), irlba (>= 2.3.3), progress (>= 1.2.2),
-        Matrix, ggplot2 (>= 3.2.1), dplyr, DescTools, ggpubr,
+        Matrix, ggplot2 (>= 3.2.1), dplyr, DescTools, ggpubr, gtools,
         reshape2, ggrepel, rdist
 Imports: umap (>= 0.2.4.0), irlba (>= 2.3.3), progress (>= 1.2.2),
-        Matrix, ggplot2 (>= 3.2.1), dplyr, DescTools,
+        Matrix, ggplot2 (>= 3.2.1), dplyr, DescTools, gtools,
         reshape2, ggrepel, rdist
 Collate: 
     'generics.R'
