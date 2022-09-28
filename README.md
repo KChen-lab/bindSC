@@ -63,24 +63,8 @@ $ R
 Users can also install `bindSC` from source code: 
 ``` bash 
 You need to install dependencies listed in `DESCRIPTION`. 
-Note You had better to install Seurat V3. There is large change on Seurat V4 and there may lead to errors on installation. 
-umap (>= 0.2.4.0),
-irlba (>= 2.3.3),
-progress (>= 1.2.2),
-Matrix,
-ggplot2 (>= 3.2.1),
-Seurat (<= 3.1.1),
-dplyr, 
-DescTools,
-ggpubr,
-ggplot2,
-ComplexHeatmap, 
-reshape2, 
-ggrepel,
-cluster,
-FNN, 
-reticulate, 
-rdist,
+$ R
+> install.packages(c("umap", "irlba","progress","Matrix","ggplot2","dplyr","DescTools","ggpubr","reshape2","ggrepel","rdist"))
 $ git clone https://github.com/KChen-lab/bindSC.git
 $ R CMD INSTALL bindSC
 ```
